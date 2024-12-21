@@ -7,13 +7,13 @@ use std::{
     time::Duration
 };
 use reqwest::Client;
-use tokio;
-use futures::future::join_all;
 use crate::{
     crypto,
     request,
     error::{Result, ErrorKind}
 };
+#[cfg(feature = "no-wasm")]
+use futures::future::join_all;
 
 const WORK_THREAD_COUNT: usize = 8;
 
@@ -131,6 +131,13 @@ pub async fn get_courses(
     Ok((selected_courses, favorite_courses))
 }
 
+
+#[cfg(feature = "wasm")]
+pub async fn enroll_courses(){
+    unimplemented!();
+}
+
+#[cfg(feature = "no-wasm")]
 pub async fn enroll_courses(
     client: &Client,
     token: &str,
@@ -194,53 +201,6 @@ pub async fn enroll_courses(
     println!("本轮抢课结束，继续检查...");
     Ok(())
 }
-// pub async fn enroll_courses(
-//     client: &Client,
-//     token: &str,
-//     batch_id: &str,
-//     courses: &[CourseInfo],
-//     try_if_capacity_full: bool
-// ) -> Result<()> {
-//     if courses.is_empty() {
-//         return Ok(());
-//     }
-
-//     let current_status: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
-
-//     for course in courses {
-//         let status = Arc::clone(&current_status);
-//         status.lock().unwrap().insert(course.JXBID.clone(), "doing".to_string());
-
-//         let mut tasks = Vec::new();
-//         for _ in 0..WORK_THREAD_COUNT {
-//             let client = client.clone();
-//             let token = token.to_string();
-//             let batch_id = batch_id.to_string();
-//             let class_type = course.teaching_class_type.clone().unwrap_or_default();
-//             let class_id = course.JXBID.clone();
-//             let secret_val = course.secret_val.clone().unwrap_or_default();
-//             let name = course.KCM.clone();
-//             let status = Arc::clone(&status);
-
-//             tasks.push(tokio::spawn(course_enrollment_worker(
-//                 client,
-//                 token,
-//                 batch_id,
-//                 class_type,
-//                 class_id,
-//                 secret_val,
-//                 name,
-//                 status,
-//                 try_if_capacity_full,
-//             )));
-//         }
-
-//         join_all(tasks).await;
-//     }
-    
-//     println!("本轮抢课结束，继续检查...");
-//     Ok(())
-// }
 
 async fn course_enrollment_worker(
     client: Client,
