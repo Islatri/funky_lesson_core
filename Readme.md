@@ -40,12 +40,18 @@ cargo run 114514 1919810 0 1
 2. 从release里面下载好exe
 3. 在同文件夹的终端执行
 ```shell
+# powershell
 ./funky_lesson_core.exe <username> <password> <选课轮次，从0开始记数> <是否循环（填个数就开，不填不开）>
+# cmd
+funky_lesson_core.exe <username> <password> <选课轮次，从0开始记数> <是否循环（填个数就开，不填不开）>
 ```
 
 例如
 ```shell
+# powershell
 ./funky_lesson_core.exe 114514 1919810 0 1
+# cmd
+funky_lesson_core.exe 114514 1919810 0 1
 ```
 
 然后验证码图片captcha.png会保存到当前目录，在终端里面正确输入就行(不分大小写)
