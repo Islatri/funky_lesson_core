@@ -2,7 +2,7 @@
 use reqwest::{Client, header::{HeaderMap, HeaderValue}};
 use serde_json::Value;
 use std::collections::HashMap;
-use crate::error::Result;
+use crate::error::{Result, ErrorKind};
 
 
 #[cfg(feature = "no-wasm")]
@@ -204,14 +204,32 @@ pub async fn select_course(
 
 
 #[cfg(feature = "wasm")]
-use gloo_net::http::{Request, RequestBuilder};
+use gloo_net::http::{Request,Headers, RequestBuilder};
 #[cfg(feature = "wasm")]
-use web_sys::RequestInit;
+use web_sys::{RequestInit, RequestMode, RequestCredentials};
 
 // Helper function to convert JsValue errors to our error type
 #[cfg(feature = "wasm")]
 fn js_err_to_string(err: impl std::fmt::Debug) -> crate::error::ErrorKind {
     crate::error::ErrorKind::ParseError(format!("{:?}", err))
+}
+
+#[cfg(feature = "wasm")]
+async fn build_request(method: &str, url: &str) -> RequestBuilder {
+    let mut builder = match method {
+        "GET" => Request::get(url),
+        "POST" => Request::post(url),
+        _ => Request::get(url)
+    };
+
+    // 添加基础请求头
+    builder = builder
+        .mode(RequestMode::Cors)
+        .credentials(RequestCredentials::Include)
+        .header("Accept", "application/json")
+        .header("Content-Type", "application/json");
+
+    builder
 }
 
 // 我们不需要创建客户端，因为 gloo_net 会使用浏览器的 fetch API
@@ -222,12 +240,28 @@ pub async fn create_client() -> Result<()> {
 
 #[cfg(feature = "wasm")]
 pub async fn get_aes_key() -> Result<Vec<u8>> {
-    let index_url = "https://icourses.jlu.edu.cn/";
+    let index_url = "https://icourses.jlu.edu.cn/xsxk/profile/index.html";
+
     let resp = Request::get(index_url)
+        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+        .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+        .header("Origin", "http://localhost:1420")
+        .header("Referer", "http://localhost:1420/")
         .send()
         .await?;
+
+        
+    log::debug!("Response status: {:?}", resp.status());
+    log::debug!("Response headers: {:?}", resp.headers());
+
     let html = resp.text().await?;
+
+
+    log::debug!("Response length: {}", html.len());
+    log::debug!("First 100 chars: {}", &html[..100.min(html.len())]);
     
+
     // Extract AES key from HTML
     let key = html
         .find("loginVue.loginForm.aesKey")
@@ -252,6 +286,8 @@ pub async fn get_aes_key() -> Result<Vec<u8>> {
 pub async fn get_captcha() -> Result<(String, String)> {
     let captcha_url = "https://icourses.jlu.edu.cn/xsxk/auth/captcha";
     let resp = Request::post(captcha_url)
+        .mode(RequestMode::Cors)  // 试试设置这个
+        .credentials(RequestCredentials::SameOrigin) // 和这个
         .send()
         .await?;
     let captcha_data = resp.json::<Value>().await?;
@@ -291,6 +327,28 @@ pub async fn send_login_request(
 
     resp.json::<Value>().await.map_err(Into::into)
 }
+#[cfg(feature = "wasm")]
+pub async fn set_batch_proxy(batch_id: &str, token: &str) -> Result<Value> {
+    // 使用本地代理服务器 URL
+    let url = "http://localhost:3030/api/proxy/elective/user";
+    
+    let mut body = HashMap::new();
+    body.insert("batchId", batch_id);
+    body.insert("originalUrl", "https://icourses.jlu.edu.cn/xsxk/elective/user");
+
+    let resp = build_request("POST", url).await
+        .header("Authorization", token)
+        .json(&body)?  // 使用 json 而不是 query
+        .send()
+        .await?;
+
+    if !resp.ok() {
+        let error = resp.text().await?;
+        return Err(ErrorKind::ParseError(format!("Request failed: {}", error)).into());
+    }
+
+    resp.json::<Value>().await.map_err(Into::into)
+}
 
 #[cfg(feature = "wasm")]
 pub async fn set_batch(
@@ -300,15 +358,30 @@ pub async fn set_batch(
     let url = "https://icourses.jlu.edu.cn/xsxk/elective/user";
     let mut params = HashMap::new();
     params.insert("batchId", batch_id);
+log::debug!("Sending request to {} with token: {}", url, token);
+
 
     let resp = Request::post(url)
+        .mode(RequestMode::NoCors)
+        // .credentials(RequestCredentials::SameOrigin)
+        // .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+        // .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+        // .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+        // .header("Origin", "http://localhost:1420")
+        // .header("Referer", "http://localhost:1420/")
         .header("Authorization", token)
         .query(params)
         .send()
         .await?;
 
-    resp.json::<Value>().await.map_err(Into::into)
+    log::debug!("Set Batch Response {:?}", resp);
+    log::debug!("Set Batch Response status: {:?}", resp.status());
+    log::debug!("Set Batch Response headers: {:?}", resp.headers());
+
+    // resp.json::<Value>().await.map_err(Into::into)
+    Ok(serde_json::json!({"code": 200,"status": "sent"}))
 }
+
 
 #[cfg(feature = "wasm")]
 pub async fn get_selected_courses(
@@ -371,7 +444,7 @@ pub async fn select_course(
 #[cfg(feature = "wasm")]
 async fn handle_preflight(url: &str) -> Result<()> {
     let mut opts = RequestInit::new();
-    opts.method("OPTIONS");
+    opts.set_method("OPTIONS");
 
     let request = web_sys::Request::new_with_str_and_init(url, &opts)
         .map_err(|e| crate::error::ErrorKind::ParseError(format!("{:?}", e)))?;

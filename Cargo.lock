@@ -239,8 +239,11 @@ dependencies = [
  "ecb",
  "futures",
  "gloo-net",
+ "js-sys",
+ "log",
  "reqwest",
  "serde",
+ "serde-wasm-bindgen",
  "serde_json",
  "tokio",
  "wasm-bindgen",
@@ -1094,6 +1097,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b9781016e935a97e8beecf0c933758c97a5520d32930e460142b4cd80c6338e"
 dependencies = [
  "serde_derive",
+]
+
+[[package]]
+name = "serde-wasm-bindgen"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8302e169f0eddcc139c70f139d19d6467353af16f9fce27e8c30158036a1e16b"
+dependencies = [
+ "js-sys",
+ "serde",
+ "wasm-bindgen",
 ]
 
 [[package]]
