@@ -3,9 +3,12 @@
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::Arc,
     time::Duration
 };
+use std::sync::Mutex as StdMutex;
+#[cfg(feature = "gui")]
+use tokio::sync::Mutex as TokioMutex;
 use reqwest::Client;
 use crate::{
     crypto,
@@ -38,6 +41,192 @@ pub struct CourseInfo {
     pub secret_val: Option<String>,
 }
 
+// 新增：GUI相关的状态结构体
+#[cfg(feature = "gui")]
+#[derive(Debug, Clone, Serialize, Deserialize,Default)]
+pub struct EnrollmentStatus {
+    pub total_requests: u32,
+    pub course_statuses: Vec<String>,
+    pub is_running: bool,
+}
+
+
+#[cfg(feature = "gui")]
+pub async fn login(
+    client: &Client,
+    username: &str,
+    password: &str,
+    captcha: &str,  // GUI模式下直接接收验证码
+    uuid: &str      // GUI模式下直接接收uuid
+) -> Result<(String, Vec<BatchInfo>)> {
+    // Get AES key
+    let aes_key = request::get_aes_key(client).await?;
+    
+    // Encrypt password and login
+    let encrypted_password = crypto::encrypt_password(password, &aes_key)?;
+    let login_resp = request::send_login_request(
+        client,
+        username,
+        &encrypted_password,
+        captcha,
+        uuid
+    ).await?;
+
+    if login_resp["code"] == 200 && login_resp["msg"] == "登录成功" {
+        let token = login_resp["data"]["token"]
+            .as_str()
+            .ok_or_else(|| ErrorKind::ParseError("Invalid token".to_string()))?
+            .to_string();
+            
+        let batch_list = serde_json::from_value(
+            login_resp["data"]["student"]["electiveBatchList"].clone()
+        )?;
+
+        Ok((token, batch_list))
+    } else {
+        Err(ErrorKind::ParseError(login_resp["msg"].to_string()).into())
+    }
+}
+
+#[cfg(feature = "gui")]
+pub async fn get_captcha_inner(client: &Client) -> Result<(String, String)> {
+    let (uuid, captcha_b64) = request::get_captcha(client).await?;
+    let captcha_img = crypto::decode_captcha_image(&captcha_b64)?;
+    // GUI模式下保存验证码图片并返回base64
+    let base64 = base64_simd::STANDARD;
+    std::fs::write("captcha.png", &captcha_img)?;
+    Ok((uuid, base64.encode_to_string(captcha_img)))
+}
+
+
+// GUI版本的选课函数
+#[cfg(feature = "gui")]
+pub async fn enroll_courses(
+    client: &Client,
+    token: &str,
+    batch_id: &str,
+    courses: &[CourseInfo],
+    try_if_capacity_full: bool,
+    status: Arc<TokioMutex<EnrollmentStatus>>,
+    should_continue: Arc<TokioMutex<bool>>,
+) -> Result<()> {
+    if courses.is_empty() {
+        return Ok(());
+    }
+
+    let current_status: Arc<TokioMutex<HashMap<String, String>>> = Arc::new(TokioMutex::new(HashMap::new()));
+    let mut tasks = Vec::new();
+    let total_requests = Arc::new(TokioMutex::new(0u32));
+
+    // 为每个课程创建一个任务
+    for thread_id in 0..WORK_THREAD_COUNT {
+        let client = client.clone();
+        let token = token.to_string();
+        let batch_id = batch_id.to_string();
+        let courses = courses.to_vec();
+        let status_map = Arc::clone(&current_status);
+        let enrollment_status = Arc::clone(&status);
+        let should_continue = Arc::clone(&should_continue);
+        let total_requests = Arc::clone(&total_requests);
+        let course_count = courses.len();
+
+        tasks.push(tokio::spawn(async move {
+            let mut course_idx = thread_id % course_count;
+            
+            while *should_continue.lock().await {
+                let course = &courses[course_idx];
+                
+                // 更新状态
+                {
+                    let mut counter = total_requests.lock().await;
+                    *counter += 1;
+                    let statuses: Vec<String> = {
+                        let status_map = status_map.lock().await;
+                        courses.iter().map(|c| {
+                            format!("[{}]{}",
+                                c.KCM,
+                                status_map.get(&c.JXBID)
+                                    .unwrap_or(&"等待中".to_string())
+                            )
+                        }).collect()
+                    };
+
+                    let mut status = enrollment_status.lock().await;
+                    status.total_requests = *counter;
+                    status.course_statuses = statuses;
+                }
+
+                // 尝试选课
+                let _result = course_enrollment_worker(
+                    client.clone(),
+                    token.clone(),
+                    batch_id.clone(),
+                    course.clone(),
+                    Arc::clone(&status_map),
+                    try_if_capacity_full,
+                ).await;
+
+                if !*should_continue.lock().await {
+                    break;
+                }
+
+                course_idx = (course_idx + 1) % course_count;
+                
+                // 短暂延迟避免请求过快
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
+        }));
+    }
+
+    join_all(tasks).await;
+    Ok(())
+}
+
+#[cfg(feature = "gui")]
+async fn course_enrollment_worker(
+    client: Client,
+    token: String,
+    batch_id: String,
+    course: CourseInfo,
+    status_map: Arc<TokioMutex<HashMap<String, String>>>,
+    try_if_capacity_full: bool,
+) -> Result<()> {
+    let result = request::select_course(
+        &client,
+        &token,
+        &batch_id,
+        &course.teaching_class_type.clone().unwrap_or_default(),
+        &course.JXBID,
+        &course.secret_val.clone().unwrap_or_default()
+    ).await;
+
+    match result {
+        Ok(json) => {
+            let code = json["code"].as_i64().unwrap_or(0);
+            let msg = json["msg"].as_str().unwrap_or("");
+            
+            let status = match (code, msg) {
+                (200, _) => "选课成功",
+                (500, "该课程已在选课结果中") => "已选",
+                (500, "本轮次选课暂未开始") => "未开始",
+                (500, "课容量已满") if !try_if_capacity_full => "已满",
+                (500, "课容量已满") => "等待中",
+                (500, "参数校验不通过") => "参数错误",
+                (401, _) => "未登录",
+                _ => "失败"
+            };
+
+            status_map.lock().await.insert(course.JXBID.clone(), status.to_string());
+            Ok(())
+        },
+        Err(e) => {
+            status_map.lock().await.insert(course.JXBID.clone(), "请求错误".to_string());
+            Err(e)
+        }
+    }
+}
+
+#[cfg(feature = "tui")]
 pub async fn login(
     client: &Client,
     username: &str,
@@ -85,6 +274,7 @@ pub async fn login(
         Err(ErrorKind::ParseError("Login failed".to_string()).into())
     }
 }
+
 
 pub async fn set_batch(
     client: &Client,
@@ -137,7 +327,8 @@ pub async fn enroll_courses(){
     unimplemented!();
 }
 
-#[cfg(feature = "no-wasm")]
+// tui and no-wasm cfg 
+#[cfg(all(feature = "no-wasm", feature = "tui"))]
 pub async fn enroll_courses(
     client: &Client,
     token: &str,
@@ -149,7 +340,7 @@ pub async fn enroll_courses(
         return Ok(());
     }
 
-    let current_status: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
+    let current_status: Arc<StdMutex<HashMap<String, String>>> = Arc::new(StdMutex::new(HashMap::new()));
     let mut tasks = Vec::new();
 
     // 创建 WORK_THREAD_COUNT 个工作线程
@@ -202,6 +393,7 @@ pub async fn enroll_courses(
     Ok(())
 }
 
+#[cfg(feature = "tui")]
 async fn course_enrollment_worker(
     client: Client,
     token: String,
@@ -210,7 +402,7 @@ async fn course_enrollment_worker(
     class_id: String,
     secret_val: String,
     name: String,
-    current_status: Arc<Mutex<HashMap<String, String>>>,
+    current_status: Arc<StdMutex<HashMap<String, String>>>,
     try_if_capacity_full: bool,
 ) {
     loop {

@@ -7,7 +7,7 @@ edition = "2021"
 tokio = { version = "1.42.0", features = ["full"] }
 reqwest = { version = "0.12.9", default-features = false, features = ["rustls-tls","json", "cookies"] }
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde_json = "1.0.134"
 aes = "0.8.4"
 ecb = "0.1.2"
 base64-simd = "0.8.0"
@@ -16,6 +16,8 @@ wasm-bindgen = { version = "0.2.99", optional = true }
 wasm-bindgen-futures = { version = "0.4.49", optional = true }
 
 [features]
-default = ["no-wasm"]
+default = ["no-wasm","tui"]
+tui = []
+gui = []
 no-wasm = ["futures"]
 wasm = ["wasm-bindgen","wasm-bindgen-futures"]
