@@ -6,9 +6,12 @@ use std::{
     sync::Arc,
     time::Duration
 };
+
+#[cfg(all(feature = "no-wasm", feature = "tui"))]
 use std::sync::Mutex as StdMutex;
-#[cfg(feature = "gui")]
+#[cfg(all(feature = "no-wasm", feature = "gui"))]
 use tokio::sync::Mutex as TokioMutex;
+#[cfg(feature = "no-wasm")]
 use reqwest::Client;
 use crate::{
     crypto,
@@ -42,7 +45,8 @@ pub struct CourseInfo {
 }
 
 // 新增：GUI相关的状态结构体
-#[cfg(feature = "gui")]
+
+#[cfg(all(feature = "no-wasm", feature = "gui"))]
 #[derive(Debug, Clone, Serialize, Deserialize,Default)]
 pub struct EnrollmentStatus {
     pub total_requests: u32,
@@ -51,7 +55,8 @@ pub struct EnrollmentStatus {
 }
 
 
-#[cfg(feature = "gui")]
+
+#[cfg(all(feature = "no-wasm", feature = "gui"))]
 pub async fn login(
     client: &Client,
     username: &str,
@@ -88,19 +93,18 @@ pub async fn login(
     }
 }
 
-#[cfg(feature = "gui")]
+
+#[cfg(all(feature = "no-wasm", feature = "gui"))]
 pub async fn get_captcha_inner(client: &Client) -> Result<(String, String)> {
     let (uuid, captcha_b64) = request::get_captcha(client).await?;
     let captcha_img = crypto::decode_captcha_image(&captcha_b64)?;
-    // GUI模式下保存验证码图片并返回base64
     let base64 = base64_simd::STANDARD;
     std::fs::write("captcha.png", &captcha_img)?;
     Ok((uuid, base64.encode_to_string(captcha_img)))
 }
 
 
-// GUI版本的选课函数
-#[cfg(feature = "gui")]
+#[cfg(all(feature = "no-wasm", feature = "gui"))]
 pub async fn enroll_courses(
     client: &Client,
     token: &str,
@@ -182,7 +186,8 @@ pub async fn enroll_courses(
     Ok(())
 }
 
-#[cfg(feature = "gui")]
+
+#[cfg(all(feature = "no-wasm", feature = "gui"))]
 async fn course_enrollment_worker(
     client: Client,
     token: String,
@@ -226,7 +231,7 @@ async fn course_enrollment_worker(
     }
 }
 
-#[cfg(feature = "tui")]
+#[cfg(all(feature = "no-wasm", feature = "tui"))]
 pub async fn login(
     client: &Client,
     username: &str,
@@ -276,6 +281,8 @@ pub async fn login(
 }
 
 
+
+#[cfg(feature = "no-wasm")]
 pub async fn set_batch(
     client: &Client,
     token: &str,
@@ -293,10 +300,12 @@ pub async fn set_batch(
         return Err(ErrorKind::ParseError("Failed to set batch".to_string()).into());
     }
 
+    #[cfg(all(feature = "no-wasm", feature = "tui"))]
     print_batch_info(&batch_list[batch_idx]);
     Ok(batch_id)
 }
 
+#[cfg(feature = "no-wasm")]
 pub async fn get_courses(
     client: &Client,
     token: &str,
@@ -393,7 +402,7 @@ pub async fn enroll_courses(
     Ok(())
 }
 
-#[cfg(feature = "tui")]
+#[cfg(all(feature = "no-wasm", feature = "tui"))]
 async fn course_enrollment_worker(
     client: Client,
     token: String,
@@ -478,6 +487,7 @@ async fn course_enrollment_worker(
     }
 }
 
+#[cfg(all(feature = "no-wasm", feature = "tui"))]
 fn print_login_success(login_resp: &serde_json::Value) {
     if let Some(student) = login_resp["data"]["student"].as_object() {
         println!("Login success!");
@@ -500,6 +510,7 @@ fn print_login_success(login_resp: &serde_json::Value) {
     }
 }
 
+#[cfg(all(feature = "no-wasm", feature = "tui"))]
 fn print_batch_info(batch: &BatchInfo) {
     println!("Selected BatchId:");
     println!("=====================================");
@@ -509,6 +520,7 @@ fn print_batch_info(batch: &BatchInfo) {
     println!("=====================================");
 }
 
+#[cfg(all(feature = "no-wasm", feature = "tui"))]
 pub fn print_courses(selected: &[CourseInfo], favorite: &[CourseInfo]) {
     println!("==================已选课程==================");
     for course in selected {

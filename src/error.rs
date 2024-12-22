@@ -30,9 +30,17 @@ impl From<ErrorKind> for Error {
     }
 }
 
+#[cfg(feature = "no-wasm")]
 impl From<reqwest::Error> for Error {
     fn from(e: reqwest::Error) -> Error {
         Error::new(ErrorKind::ReqwestError(e))
+    }
+}
+
+#[cfg(feature = "wasm")]
+impl From<gloo_net::Error> for Error {
+    fn from(e: gloo_net::Error) -> Error {
+        Error::new(ErrorKind::CourseError(e.to_string()))
     }
 }
 
@@ -55,7 +63,10 @@ impl From<std::io::Error> for Error {
 }
 
 pub enum ErrorKind {
+    #[cfg(feature = "no-wasm")]
     ReqwestError(reqwest::Error),
+    #[cfg(feature = "wasm")]
+    GlooNetError(gloo_net::Error),
     SerdeJsonError(serde_json::Error),
     Base64Error(base64_simd::Error),
     StdIoError(std::io::Error),
@@ -66,7 +77,10 @@ pub enum ErrorKind {
 impl std::fmt::Debug for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match *self {
+            #[cfg(feature = "no-wasm")]
             ErrorKind::ReqwestError(ref e) => write!(f, "ReqwestError: {:?}", e),
+            #[cfg(feature = "wasm")]
+            ErrorKind::GlooNetError(ref e) => write!(f, "GlooNetError: {:?}", e),
             ErrorKind::SerdeJsonError(ref e) => write!(f, "SerdeJsonError: {:?}", e),
             ErrorKind::Base64Error(ref e) => write!(f, "Base64Error: {:?}", e),
             ErrorKind::StdIoError(ref e) => write!(f, "StdIoError: {:?}", e),
@@ -79,7 +93,10 @@ impl std::fmt::Debug for ErrorKind {
 impl std::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match *self {
+            #[cfg(feature = "no-wasm")]
             ErrorKind::ReqwestError(ref e) => write!(f, "ReqwestError: {:?}", e),
+            #[cfg(feature = "wasm")]
+            ErrorKind::GlooNetError(ref e) => write!(f, "GlooNetError: {:?}", e),
             ErrorKind::SerdeJsonError(ref e) => write!(f, "SerdeJsonError: {:?}", e),
             ErrorKind::Base64Error(ref e) => write!(f, "Base64Error: {:?}", e),
             ErrorKind::StdIoError(ref e) => write!(f, "StdIoError: {:?}", e),
