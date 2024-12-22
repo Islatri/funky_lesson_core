@@ -2,7 +2,11 @@
 use reqwest::{Client, header::{HeaderMap, HeaderValue}};
 use serde_json::Value;
 use std::collections::HashMap;
-use crate::error::{Result, ErrorKind};
+#[cfg(feature = "wasm")]
+use serde_json::json;
+#[cfg(feature = "wasm")]
+use crate::error::ErrorKind;
+use crate::error::Result;
 
 
 #[cfg(feature = "no-wasm")]
@@ -327,27 +331,142 @@ pub async fn send_login_request(
 
     resp.json::<Value>().await.map_err(Into::into)
 }
+
+// #[cfg(feature = "wasm")]
+// pub async fn set_batch_proxy(batch_id: &str, token: &str) -> Result<Value> {
+//     let url = "http://localhost:3030/api/proxy/elective/user";
+   
+//     let body = serde_json::json!({
+//         "batchId": batch_id,
+//         "originalUrl": "https://icourses.jlu.edu.cn/xsxk/elective/user"
+//     });
+
+//     let resp = build_request("POST", url).await
+//         .header("Authorization", token)
+//         .json(&body)?
+//         .send()
+//         .await?;
+
+//     // 先获取响应文本
+//     let text = resp.text().await?;
+    
+//     // 尝试解析为 JSON
+//     match serde_json::from_str::<Value>(&text) {
+//         Ok(json) => {
+//             if json.get("error").is_some() {
+//                 return Err(ErrorKind::ParseError(format!("Server error: {}", text)).into());
+//             }
+//             Ok(json)
+//         },
+//         Err(_) => {
+//             // 如果不是 JSON，返回解析错误
+//             Err(ErrorKind::ParseError(format!("Invalid JSON response: {}", text)).into())
+//         }
+//     }
+// }
+
 #[cfg(feature = "wasm")]
 pub async fn set_batch_proxy(batch_id: &str, token: &str) -> Result<Value> {
-    // 使用本地代理服务器 URL
     let url = "http://localhost:3030/api/proxy/elective/user";
     
-    let mut body = HashMap::new();
-    body.insert("batchId", batch_id);
-    body.insert("originalUrl", "https://icourses.jlu.edu.cn/xsxk/elective/user");
+    let body = json!({
+        "original_url": "https://icourses.jlu.edu.cn/xsxk/elective/user",
+        "batch_id": batch_id
+    });
 
     let resp = build_request("POST", url).await
         .header("Authorization", token)
-        .json(&body)?  // 使用 json 而不是 query
+        .json(&body)?
         .send()
         .await?;
 
-    if !resp.ok() {
-        let error = resp.text().await?;
-        return Err(ErrorKind::ParseError(format!("Request failed: {}", error)).into());
-    }
+    handle_json_response(resp).await
+}
 
-    resp.json::<Value>().await.map_err(Into::into)
+#[cfg(feature = "wasm")]
+pub async fn get_selected_courses_proxy(token: &str, batch_id: &str) -> Result<Value> {
+    let url = "http://localhost:3030/api/proxy/elective/select";
+    
+    let body = json!({
+        "original_url": "https://icourses.jlu.edu.cn/xsxk/elective/select",
+        "batch_id": batch_id
+    });
+
+    let resp = build_request("POST", url).await
+        .header("Authorization", token)
+        .json(&body)?
+        .send()
+        .await?;
+
+    handle_json_response(resp).await
+}
+
+#[cfg(feature = "wasm")]
+pub async fn get_favorite_courses_proxy(token: &str, batch_id: &str) -> Result<Value> {
+    let url = "http://localhost:3030/api/proxy/sc/clazz/list";
+    
+    let body = json!({
+        "original_url": "https://icourses.jlu.edu.cn/xsxk/sc/clazz/list",
+        "batch_id": batch_id
+    });
+
+    let resp = build_request("POST", url).await
+        .header("Authorization", token)
+        .json(&body)?
+        .send()
+        .await?;
+
+    handle_json_response(resp).await
+}
+
+#[cfg(feature = "wasm")]
+pub async fn select_course_proxy(
+    token: &str,
+    batch_id: &str,
+    class_type: &str,
+    class_id: &str,
+    secret_val: &str
+) -> Result<Value> {
+    let url = "http://localhost:3030/api/proxy/sc/clazz/addxk";
+    
+    let body = json!({
+        "original_url": "https://icourses.jlu.edu.cn/xsxk/sc/clazz/addxk",
+        "batch_id": batch_id,
+        "class_type": class_type,
+        "class_id": class_id,
+        "secret_val": secret_val
+    });
+
+    let resp = build_request("POST", url).await
+        .header("Authorization", token)
+        .json(&body)?
+        .send()
+        .await?;
+
+    handle_json_response(resp).await
+}
+
+// 统一的响应处理函数
+#[cfg(feature = "wasm")]
+async fn handle_json_response(resp: gloo_net::http::Response) -> Result<Value> {
+    let status = resp.ok();
+    let text = resp.text().await?;
+    
+    if !status {
+        return Err(ErrorKind::ParseError(format!("Request failed: {}", text)).into());
+    }
+    
+    match serde_json::from_str::<Value>(&text) {
+        Ok(json) => {
+            if let Some(error) = json.get("error") {
+                return Err(ErrorKind::ParseError(format!("Server error: {}", error)).into());
+            }
+            Ok(json)
+        },
+        Err(_) => {
+            Err(ErrorKind::ParseError(format!("Invalid JSON response: {}", text)).into())
+        }
+    }
 }
 
 #[cfg(feature = "wasm")]
