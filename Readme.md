@@ -2,15 +2,17 @@
 
 Rust写的吉林大学抢课脚本
 
-![funky_lesson_core GIF演示](./funky-lesson-core.gif)
+![funky_lesson_core GIF演示，没显示的话检查一下网络环境或者用电脑浏览器打开](./funky-lesson-core.gif)
 
-funky-lesson的核心库部分，GUI部分开发中，预计今天下午能整完
+[funky-lesson](https://github.com/ZoneHerobrine/funky-lesson)的核心库部分,GUI已经写好啦！基于Leptos+Actix+Tauri的纯Rust实现！目前0.0.4版本的开箱即用exe可以在release里面找到，点击[这里](https://github.com/ZoneHerobrine/funky-lesson/releases/tag/release)
+
+目前默认是8线程独立轮询你的收藏课程列表（每个线程均从不同的课开始轮询，各态历经），请求间隔暂定是500ms。断网会提示请求失败，网络环境恢复后会直接自动重连继续循环选课。
 
 funky_lesson_core是基于[MoonWX从H4ckF0rFun同学那里Fork下来的Fuck-Lesson](https://github.com/MoonWX/Fuck-Lesson)（一个python单文件抢课脚本）重写而成的Rust库（在examples文件夹下的standalone.rs包含了rust的单文件实现(但我去掉了ocr部分，感觉不太必要)，而src里面则是我封装和适配app之后的版本）
 
 # Acknowledgement
 
-无论是MoonWX同学还是H4ckF0rFun的Fuck-Lesson仓库都没有挂证书，只能在这里口头Acknowledgement了（
+无论是MoonWX同学还是H4ckF0rFun同学的Fuck-Lesson仓库都没有挂证书，只能在这里口头Acknowledgement了（
 
 原python脚本原封不动放在raw.py里面了
 
