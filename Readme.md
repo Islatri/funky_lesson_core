@@ -4,7 +4,7 @@ Rust写的吉林大学抢课脚本
 
 ![funky_lesson_core GIF演示](./funky-lesson-core.gif)
 
-funky-lesson的核心库部分
+funky-lesson的核心库部分，GUI部分开发中，预计今天下午能整完
 
 funky_lesson_core是基于[MoonWX从H4ckF0rFun同学那里Fork下来的Fuck-Lesson](https://github.com/MoonWX/Fuck-Lesson)（一个python单文件抢课脚本）重写而成的Rust库（在examples文件夹下的standalone.rs包含了rust的单文件实现(但我去掉了ocr部分，感觉不太必要)，而src里面则是我封装和适配app之后的版本）
 
