@@ -294,6 +294,7 @@ pub async fn get_captcha() -> Result<(String, String)> {
         .credentials(RequestCredentials::SameOrigin) // 和这个
         .send()
         .await?;
+
     let captcha_data = resp.json::<Value>().await?;
     
     let uuid = captcha_data["data"]["uuid"]
@@ -307,6 +308,89 @@ pub async fn get_captcha() -> Result<(String, String)> {
         .to_string();
 
     Ok((uuid, captcha))
+}
+
+#[cfg(feature = "wasm")]
+pub async fn get_aes_key_proxy() -> Result<Vec<u8>> {
+    let url = "http://localhost:3030/api/proxy/profile/index.html";
+    
+    let resp = build_request("GET", url).await
+        .send()
+        .await?;
+
+    let html = resp.text().await?;
+    
+    // Extract AES key from HTML
+    let key = html
+        .find("loginVue.loginForm.aesKey")
+        .and_then(|start| {
+            html[start..].find('"').map(|key_start| {
+                html[start + key_start + 1..]
+                    .find('"')
+                    .map(|key_end| {
+                        html[start + key_start + 1..start + key_start + 1 + key_end]
+                            .as_bytes()
+                            .to_vec()
+                    })
+            })
+        })
+        .flatten()
+        .ok_or_else(|| ErrorKind::ParseError("Failed to extract AES key".to_string()))?;
+
+    Ok(key)
+}
+
+#[cfg(feature = "wasm")]
+pub async fn get_captcha_proxy() -> Result<(String, String)> {
+    let url = "http://localhost:3030/api/proxy/auth/captcha";
+    
+    let body = json!({
+        "original_url": "https://icourses.jlu.edu.cn/xsxk/auth/captcha"
+    });
+
+    let resp = build_request("POST", url).await
+        .json(&body)?
+        .send()
+        .await?;
+
+    let json = handle_json_response(resp).await?;
+    
+    let uuid = json["data"]["uuid"]
+        .as_str()
+        .ok_or_else(|| ErrorKind::ParseError("Invalid captcha uuid".to_string()))?
+        .to_string();
+    
+    let captcha = json["data"]["captcha"]
+        .as_str()
+        .ok_or_else(|| ErrorKind::ParseError("Invalid captcha data".to_string()))?
+        .to_string();
+
+    Ok((uuid, captcha))
+}
+
+#[cfg(feature = "wasm")]
+pub async fn send_login_request_proxy(
+    username: &str,
+    encrypted_password: &str,
+    captcha: &str,
+    uuid: &str
+) -> Result<Value>{
+    let url = "http://localhost:3030/api/proxy/auth/login";
+    
+    let body = json!({
+        "original_url": "https://icourses.jlu.edu.cn/xsxk/auth/login",
+        "loginname": username,
+        "password": encrypted_password,
+        "captcha": captcha,
+        "uuid": uuid
+    });
+
+    let resp = build_request("POST", url).await
+        .json(&body)?
+        .send()
+        .await?;
+
+    handle_json_response(resp).await
 }
 
 #[cfg(feature = "wasm")]
@@ -332,38 +416,6 @@ pub async fn send_login_request(
     resp.json::<Value>().await.map_err(Into::into)
 }
 
-// #[cfg(feature = "wasm")]
-// pub async fn set_batch_proxy(batch_id: &str, token: &str) -> Result<Value> {
-//     let url = "http://localhost:3030/api/proxy/elective/user";
-   
-//     let body = serde_json::json!({
-//         "batchId": batch_id,
-//         "originalUrl": "https://icourses.jlu.edu.cn/xsxk/elective/user"
-//     });
-
-//     let resp = build_request("POST", url).await
-//         .header("Authorization", token)
-//         .json(&body)?
-//         .send()
-//         .await?;
-
-//     // 先获取响应文本
-//     let text = resp.text().await?;
-    
-//     // 尝试解析为 JSON
-//     match serde_json::from_str::<Value>(&text) {
-//         Ok(json) => {
-//             if json.get("error").is_some() {
-//                 return Err(ErrorKind::ParseError(format!("Server error: {}", text)).into());
-//             }
-//             Ok(json)
-//         },
-//         Err(_) => {
-//             // 如果不是 JSON，返回解析错误
-//             Err(ErrorKind::ParseError(format!("Invalid JSON response: {}", text)).into())
-//         }
-//     }
-// }
 
 #[cfg(feature = "wasm")]
 pub async fn set_batch_proxy(batch_id: &str, token: &str) -> Result<Value> {
