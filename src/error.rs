@@ -1,13 +1,13 @@
 pub type Result<T> = core::result::Result<T, Error>;
 
 pub struct Error {
-    pub inner: Box<ErrorKind>
+    pub inner: Box<ErrorKind>,
 }
 
 impl Error {
     pub fn new(kind: ErrorKind) -> Error {
         Error {
-            inner: Box::new(kind)
+            inner: Box::new(kind),
         }
     }
 }

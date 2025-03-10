@@ -8,20 +8,20 @@ aes = "0.8.4"
 ecb = "0.1.2"
 base64-simd = "0.8.0"
 
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.134"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
 
-tokio = { version = "1.42.0", features = ["full"], optional = true  }
-reqwest = { version = "0.12.9", default-features = false, features = ["rustls-tls","json", "cookies"] , optional = true }
+tokio = { version = "1.44.0", features = ["full"], optional = true  }
+reqwest = { version = "0.12.12", default-features = false, features = ["rustls-tls","json", "cookies"] , optional = true }
 futures = {version="0.3.31",optional=true}
 
 gloo-net = { version = "0.6.0",optional = true}
-js-sys = { version ="0.3",optional = true}
-web-sys = { version = "0.3.76", features = ["RequestInit", "Headers","console", "Window", "Performance"] ,optional=true}
-wasm-bindgen = { version = "0.2.99", optional = true }
-wasm-bindgen-futures = { version = "0.4.49", optional = true }
+js-sys = { version ="0.3.77",optional = true}
+web-sys = { version = "0.3.77", features = ["RequestInit", "Headers","console", "Window", "Performance"] ,optional=true}
+wasm-bindgen = { version = "0.2.100", optional = true }
+wasm-bindgen-futures = { version = "0.4.40", optional = true }
 serde-wasm-bindgen = { version ="0.6.5",optional = true}
-log ={ version = "0.4.14", optional = true }
+log ={ version = "0.4.26", optional = true }
 
 [features]
 default = ["no-wasm","tui"]

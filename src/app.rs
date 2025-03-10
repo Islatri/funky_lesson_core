@@ -1,27 +1,23 @@
 #![allow(non_snake_case)]
 
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    time::Duration
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
+use crate::{
+    crypto,
+    error::{ErrorKind, Result},
+    request,
+};
+#[cfg(feature = "no-wasm")]
+use futures::future::join_all;
+#[cfg(feature = "no-wasm")]
+use reqwest::Client;
 #[cfg(all(feature = "no-wasm", feature = "tui"))]
 use std::sync::Mutex as StdMutex;
 #[cfg(all(feature = "no-wasm", feature = "gui"))]
 use tokio::sync::Mutex as TokioMutex;
-#[cfg(feature = "no-wasm")]
-use reqwest::Client;
-use crate::{
-    crypto,
-    request,
-    error::{Result, ErrorKind}
-};
-#[cfg(feature = "no-wasm")]
-use futures::future::join_all;
 
-const WORK_THREAD_COUNT: usize = 8;
+const WORK_THREAD_COUNT: usize = 4;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct BatchInfo {
@@ -35,9 +31,9 @@ pub struct BatchInfo {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CourseInfo {
-    pub SKJS: String,     // 教师名
-    pub KCM: String,      // 课程名
-    pub JXBID: String,    // 教学班ID
+    pub SKJS: String,  // 教师名
+    pub KCM: String,   // 课程名
+    pub JXBID: String, // 教学班ID
     #[serde(rename = "teachingClassType")]
     pub teaching_class_type: Option<String>,
     #[serde(default, rename = "secretVal")]
@@ -47,52 +43,43 @@ pub struct CourseInfo {
 // 新增：GUI相关的状态结构体
 
 #[cfg(all(feature = "no-wasm", feature = "gui"))]
-#[derive(Debug, Clone, Serialize, Deserialize,Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EnrollmentStatus {
     pub total_requests: u32,
     pub course_statuses: Vec<String>,
     pub is_running: bool,
 }
 
-
-
 #[cfg(all(feature = "no-wasm", feature = "gui"))]
 pub async fn login(
     client: &Client,
     username: &str,
     password: &str,
-    captcha: &str,  // GUI模式下直接接收验证码
-    uuid: &str      // GUI模式下直接接收uuid
+    captcha: &str, // GUI模式下直接接收验证码
+    uuid: &str,    // GUI模式下直接接收uuid
 ) -> Result<(String, Vec<BatchInfo>)> {
     // Get AES key
     let aes_key = request::get_aes_key(client).await?;
-    
+
     // Encrypt password and login
     let encrypted_password = crypto::encrypt_password(password, &aes_key)?;
-    let login_resp = request::send_login_request(
-        client,
-        username,
-        &encrypted_password,
-        captcha,
-        uuid
-    ).await?;
+    let login_resp =
+        request::send_login_request(client, username, &encrypted_password, captcha, uuid).await?;
 
     if login_resp["code"] == 200 && login_resp["msg"] == "登录成功" {
         let token = login_resp["data"]["token"]
             .as_str()
             .ok_or_else(|| ErrorKind::ParseError("Invalid token".to_string()))?
             .to_string();
-            
-        let batch_list = serde_json::from_value(
-            login_resp["data"]["student"]["electiveBatchList"].clone()
-        )?;
+
+        let batch_list =
+            serde_json::from_value(login_resp["data"]["student"]["electiveBatchList"].clone())?;
 
         Ok((token, batch_list))
     } else {
         Err(ErrorKind::ParseError(login_resp["msg"].to_string()).into())
     }
 }
-
 
 #[cfg(all(feature = "no-wasm", feature = "gui"))]
 pub async fn get_captcha_inner(client: &Client) -> Result<(String, String)> {
@@ -102,7 +89,6 @@ pub async fn get_captcha_inner(client: &Client) -> Result<(String, String)> {
     std::fs::write("captcha.png", &captcha_img)?;
     Ok((uuid, base64.encode_to_string(captcha_img)))
 }
-
 
 #[cfg(all(feature = "no-wasm", feature = "gui"))]
 pub async fn enroll_courses(
@@ -118,7 +104,8 @@ pub async fn enroll_courses(
         return Ok(());
     }
 
-    let current_status: Arc<TokioMutex<HashMap<String, String>>> = Arc::new(TokioMutex::new(HashMap::new()));
+    let current_status: Arc<TokioMutex<HashMap<String, String>>> =
+        Arc::new(TokioMutex::new(HashMap::new()));
     let mut tasks = Vec::new();
     let total_requests = Arc::new(TokioMutex::new(0u32));
 
@@ -136,23 +123,26 @@ pub async fn enroll_courses(
 
         tasks.push(tokio::spawn(async move {
             let mut course_idx = thread_id % course_count;
-            
+
             while *should_continue.lock().await {
                 let course = &courses[course_idx];
-                
+
                 // 更新状态
                 {
                     let mut counter = total_requests.lock().await;
                     *counter += 1;
                     let statuses: Vec<String> = {
                         let status_map = status_map.lock().await;
-                        courses.iter().map(|c| {
-                            format!("[{}]{}",
-                                c.KCM,
-                                status_map.get(&c.JXBID)
-                                    .unwrap_or(&"等待中".to_string())
-                            )
-                        }).collect()
+                        courses
+                            .iter()
+                            .map(|c| {
+                                format!(
+                                    "[{}]{}",
+                                    c.KCM,
+                                    status_map.get(&c.JXBID).unwrap_or(&"等待中".to_string())
+                                )
+                            })
+                            .collect()
                     };
 
                     let mut status = enrollment_status.lock().await;
@@ -168,14 +158,15 @@ pub async fn enroll_courses(
                     course.clone(),
                     Arc::clone(&status_map),
                     try_if_capacity_full,
-                ).await;
+                )
+                .await;
 
                 if !*should_continue.lock().await {
                     break;
                 }
 
                 course_idx = (course_idx + 1) % course_count;
-                
+
                 // 短暂延迟避免请求过快
                 tokio::time::sleep(Duration::from_millis(500)).await;
             }
@@ -185,7 +176,6 @@ pub async fn enroll_courses(
     join_all(tasks).await;
     Ok(())
 }
-
 
 #[cfg(all(feature = "no-wasm", feature = "gui"))]
 async fn course_enrollment_worker(
@@ -202,14 +192,15 @@ async fn course_enrollment_worker(
         &batch_id,
         &course.teaching_class_type.clone().unwrap_or_default(),
         &course.JXBID,
-        &course.secret_val.clone().unwrap_or_default()
-    ).await;
+        &course.secret_val.clone().unwrap_or_default(),
+    )
+    .await;
 
     match result {
         Ok(json) => {
             let code = json["code"].as_i64().unwrap_or(0);
             let msg = json["msg"].as_str().unwrap_or("");
-            
+
             let status = match (code, msg) {
                 (200, _) => "选课成功",
                 (500, "该课程已在选课结果中") => "已选",
@@ -218,14 +209,20 @@ async fn course_enrollment_worker(
                 (500, "课容量已满") => "等待中",
                 (500, "参数校验不通过") => "参数错误",
                 (401, _) => "未登录",
-                _ => "失败"
+                _ => "失败",
             };
 
-            status_map.lock().await.insert(course.JXBID.clone(), status.to_string());
+            status_map
+                .lock()
+                .await
+                .insert(course.JXBID.clone(), status.to_string());
             Ok(())
-        },
+        }
         Err(e) => {
-            status_map.lock().await.insert(course.JXBID.clone(), "请求错误".to_string());
+            status_map
+                .lock()
+                .await
+                .insert(course.JXBID.clone(), "请求错误".to_string());
             Err(e)
         }
     }
@@ -235,16 +232,16 @@ async fn course_enrollment_worker(
 pub async fn login(
     client: &Client,
     username: &str,
-    password: &str
+    password: &str,
 ) -> Result<(String, Vec<BatchInfo>)> {
     // Get AES key
     let aes_key = request::get_aes_key(client).await?;
-    
+
     // Get and save captcha
     let (uuid, captcha_b64) = request::get_captcha(client).await?;
     let captcha_img = crypto::decode_captcha_image(&captcha_b64)?;
     std::fs::write("captcha.png", captcha_img)?;
-    
+
     // Get captcha input
     println!("Please check captcha.png and enter the captcha:");
     std::io::Write::flush(&mut std::io::stdout())?;
@@ -254,23 +251,17 @@ pub async fn login(
 
     // Encrypt password and login
     let encrypted_password = crypto::encrypt_password(password, &aes_key)?;
-    let login_resp = request::send_login_request(
-        client,
-        username,
-        &encrypted_password,
-        &captcha,
-        &uuid
-    ).await?;
+    let login_resp =
+        request::send_login_request(client, username, &encrypted_password, &captcha, &uuid).await?;
 
     if login_resp["code"] == 200 && login_resp["msg"] == "登录成功" {
         let token = login_resp["data"]["token"]
             .as_str()
             .ok_or_else(|| ErrorKind::ParseError("Invalid token".to_string()))?
             .to_string();
-            
-        let batch_list = serde_json::from_value(
-            login_resp["data"]["student"]["electiveBatchList"].clone()
-        )?;
+
+        let batch_list =
+            serde_json::from_value(login_resp["data"]["student"]["electiveBatchList"].clone())?;
 
         print_login_success(&login_resp);
         Ok((token, batch_list))
@@ -280,14 +271,12 @@ pub async fn login(
     }
 }
 
-
-
 #[cfg(feature = "no-wasm")]
 pub async fn set_batch(
     client: &Client,
     token: &str,
     batch_list: &[BatchInfo],
-    batch_idx: usize
+    batch_idx: usize,
 ) -> Result<String> {
     if batch_idx >= batch_list.len() {
         return Err(ErrorKind::ParseError("Invalid batch index".to_string()).into());
@@ -309,11 +298,10 @@ pub async fn set_batch(
 pub async fn get_courses(
     client: &Client,
     token: &str,
-    batch_id: &str
+    batch_id: &str,
 ) -> Result<(Vec<CourseInfo>, Vec<CourseInfo>)> {
     let selected = request::get_selected_courses(client, token, batch_id).await?;
     let favorite = request::get_favorite_courses(client, token, batch_id).await?;
-
 
     let selected_courses: Vec<CourseInfo> = if selected["code"] == 200 {
         serde_json::from_value(selected["data"].clone())?
@@ -330,26 +318,26 @@ pub async fn get_courses(
     Ok((selected_courses, favorite_courses))
 }
 
-
 #[cfg(feature = "wasm")]
-pub async fn enroll_courses(){
+pub async fn enroll_courses() {
     unimplemented!();
 }
 
-// tui and no-wasm cfg 
+// tui and no-wasm cfg
 #[cfg(all(feature = "no-wasm", feature = "tui"))]
 pub async fn enroll_courses(
     client: &Client,
     token: &str,
     batch_id: &str,
     courses: &[CourseInfo],
-    try_if_capacity_full: bool
+    try_if_capacity_full: bool,
 ) -> Result<()> {
     if courses.is_empty() {
         return Ok(());
     }
 
-    let current_status: Arc<StdMutex<HashMap<String, String>>> = Arc::new(StdMutex::new(HashMap::new()));
+    let current_status: Arc<StdMutex<HashMap<String, String>>> =
+        Arc::new(StdMutex::new(HashMap::new()));
     let mut tasks = Vec::new();
 
     // 创建 WORK_THREAD_COUNT 个工作线程
@@ -389,7 +377,8 @@ pub async fn enroll_courses(
                     name,
                     Arc::clone(&status),
                     try_if_capacity_full,
-                ).await;
+                )
+                .await;
 
                 // 循环移动到下一个课程
                 course_idx = (course_idx + 1) % course_count;
@@ -415,8 +404,8 @@ async fn course_enrollment_worker(
     try_if_capacity_full: bool,
 ) {
     loop {
-         // 检查课程状态
-         {
+        // 检查课程状态
+        {
             let status = current_status.lock().unwrap();
             if status.get(&class_id) != Some(&"doing".to_string()) {
                 break;
@@ -429,8 +418,9 @@ async fn course_enrollment_worker(
             &batch_id,
             &class_type,
             &class_id,
-            &secret_val
-        ).await;
+            &secret_val,
+        )
+        .await;
 
         match result {
             Ok(json) => {
@@ -444,31 +434,31 @@ async fn course_enrollment_worker(
                             println!("选课成功 [{}]", name);
                             status.insert(class_id.clone(), "done".to_string());
                             break;
-                        },
+                        }
                         (500, "该课程已在选课结果中") => {
                             println!("[{}] {}", name, msg);
                             status.insert(class_id.clone(), "done".to_string());
                             break;
-                        },
+                        }
                         (500, "本轮次选课暂未开始") => {
                             println!("[{}]本轮次选课暂未开始", name);
                             continue;
-                        },
+                        }
                         (500, "课容量已满") => {
                             println!("{}课容量已满", name);
                             if !try_if_capacity_full {
                                 break;
                             }
                             continue;
-                        },
+                        }
                         (500, "参数校验不通过") => {
                             println!("[{:?}]", json);
                             continue;
-                        },
+                        }
                         (401, _) => {
                             println!("{}", msg);
                             break;
-                        },
+                        }
                         _ => {
                             println!("[{}]: 失败，重试中...", code);
                             continue;
@@ -477,7 +467,7 @@ async fn course_enrollment_worker(
                 } else {
                     break;
                 }
-            },
+            }
             Err(e) => {
                 println!("请求错误: {}，重试中...", e);
                 tokio::time::sleep(Duration::from_millis(500)).await;
@@ -496,7 +486,7 @@ fn print_login_success(login_resp: &serde_json::Value) {
         println!("XM: {}", student["XM"].as_str().unwrap_or(""));
         println!("ZYMC: {}", student["ZYMC"].as_str().unwrap_or(""));
         println!("=====================================");
-        
+
         if let Some(batch_list) = student["electiveBatchList"].as_array() {
             for batch in batch_list {
                 if let Some(batch) = batch.as_object() {
@@ -531,7 +521,7 @@ pub fn print_courses(selected: &[CourseInfo], favorite: &[CourseInfo]) {
     }
 
     println!("==================收藏课程==================");
-    
+
     for course in favorite {
         let teaching_class_type = course.teaching_class_type.clone().unwrap_or_default();
         println!(

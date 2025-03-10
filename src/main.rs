@@ -1,13 +1,16 @@
-use funky_lesson_core::app::{print_courses, enroll_courses, get_courses, set_batch, login};
+use funky_lesson_core::app::{enroll_courses, get_courses, login, print_courses, set_batch};
+use funky_lesson_core::error::{ErrorKind, Result};
 use funky_lesson_core::request::create_client;
-use funky_lesson_core::error::{Result, ErrorKind};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
-    
+
     if args.len() < 4 {
-        println!("用法: {} 用户名 密码 选课批次ID（从0开始） <有循环就填个数>", args[0]);
+        println!(
+            "用法: {} 用户名 密码 选课批次ID（从0开始） <有循环就填个数>",
+            args[0]
+        );
         return Ok(());
     }
 
@@ -15,14 +18,14 @@ async fn main() -> Result<()> {
 
     let username = args[1].clone();
     let password = args[2].clone();
-    let batch_idx: usize = args[3].parse().map_err(|e| 
-        ErrorKind::ParseError(format!("Invalid batch index: {}", e))
-    )?;
+    let batch_idx: usize = args[3]
+        .parse()
+        .map_err(|e| ErrorKind::ParseError(format!("Invalid batch index: {}", e)))?;
     let mut debug_request_count = 0;
 
     loop {
         let client = create_client().await?;
-        
+
         let (token, batch_list) = loop {
             match login(&client, &username, &password).await {
                 Ok(result) => break result,
@@ -48,7 +51,7 @@ async fn main() -> Result<()> {
         // 更新并打印已选课程
         let (selected_courses, _) = get_courses(&client, &token, &batch_id).await?;
         print_courses(&selected_courses, &[]);
-        
+
         debug_request_count += 1;
         println!("DEBUG_REQUEST_COUNT: {}\n", debug_request_count);
 
@@ -56,7 +59,7 @@ async fn main() -> Result<()> {
         if args.len() == 4 {
             break;
         }
-        
+
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     }
 

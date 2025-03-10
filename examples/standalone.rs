@@ -1,14 +1,21 @@
 #![allow(non_snake_case)]
 
-use reqwest::{Client, header::{HeaderMap, HeaderValue}};
-use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, sync::{Arc, Mutex}, time::Duration};
-use tokio;
+use aes::cipher::{block_padding::Pkcs7, generic_array::GenericArray, BlockEncryptMut, KeyInit};
 use aes::Aes128;
-use aes::cipher::{block_padding::Pkcs7, BlockEncryptMut, KeyInit, generic_array::GenericArray};
+use futures::future::join_all;
+use reqwest::{
+    header::{HeaderMap, HeaderValue},
+    Client,
+};
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::{self, Write};
-use futures::future::join_all;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
+use tokio;
 
 type Aes128EcbEnc = ecb::Encryptor<Aes128>;
 const WORK_THREAD_COUNT: usize = 8;
@@ -58,11 +65,11 @@ struct CaptchaData {
     captcha: String,
 }
 
-#[derive(Debug,Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 struct CourseInfo {
-    SKJS: String,     // 教师名
-    KCM: String,      // 课程名
-    JXBID: String,    // 教学班ID
+    SKJS: String,  // 教师名
+    KCM: String,   // 课程名
+    JXBID: String, // 教学班ID
     #[serde(rename = "teachingClassType")]
     teaching_class_type: String,
     #[serde(default, rename = "secretVal")]
@@ -103,13 +110,12 @@ impl ICourses {
         })
     }
 
-
     async fn login(&mut self) -> Result<bool, Box<dyn std::error::Error>> {
         // Get AES key from index page
         let index_url = "https://icourses.jlu.edu.cn/";
         let resp = self.client.get(index_url).send().await?;
         let html = resp.text().await?;
-        
+
         // Extract AES key from HTML
         if let Some(start) = html.find("loginVue.loginForm.aesKey") {
             if let Some(key_start) = html[start..].find('"') {
@@ -125,16 +131,17 @@ impl ICourses {
         let captcha_url = "https://icourses.jlu.edu.cn/xsxk/auth/captcha";
         let resp = self.client.post(captcha_url).send().await?;
         let captcha_data: CaptchaResponse = resp.json().await?;
-        
+
         let base64 = base64_simd::STANDARD;
 
         // Save captcha image to file
-        let captcha_img = base64.decode_to_vec(captcha_data.data.captcha.split(',').nth(1).unwrap())?;
+        let captcha_img =
+            base64.decode_to_vec(captcha_data.data.captcha.split(',').nth(1).unwrap())?;
         fs::write("captcha.png", captcha_img)?;
-        
+
         println!("Please check captcha.png and enter the captcha:");
         io::stdout().flush()?;
-        
+
         let mut captcha = String::new();
         io::stdin().read_line(&mut captcha)?;
         let captcha = captcha.trim().to_string();
@@ -151,7 +158,7 @@ impl ICourses {
         let ct = Aes128EcbEnc::new(key.into())
             .encrypt_padded_mut::<Pkcs7>(&mut buf, pt_len)
             .unwrap();
-            
+
         let password_b64 = base64.encode_to_string(ct);
 
         // Login request
@@ -165,7 +172,9 @@ impl ICourses {
         params.insert("captcha", &captcha);
         params.insert("uuid", &captcha_data.data.uuid);
 
-        let resp = self.client.post(login_url)
+        let resp = self
+            .client
+            .post(login_url)
             // .json(&params)
             .query(&params)
             .send()
@@ -177,25 +186,25 @@ impl ICourses {
             if let Some(data) = login_resp.data {
                 self.token = data.token;
                 self.batch_list = data.student.elective_batch_list;
-                
+
                 println!("Login success!");
                 println!("=====================================");
                 println!("XH: {}", data.student.XH);
                 println!("XM: {}", data.student.XM);
                 println!("ZYMC: {}", data.student.ZYMC);
                 println!("=====================================");
-                
+
                 for batch in &self.batch_list {
                     println!("name: {}", batch.name);
                     println!("BeginTime: {}", batch.begin_time);
                     println!("EndTime: {}", batch.end_time);
                     println!("=====================================");
                 }
-                
+
                 return Ok(true);
             }
         }
-        
+
         println!("Login failed: {}", login_resp.msg);
         Ok(false)
     }
@@ -207,22 +216,24 @@ impl ICourses {
         }
 
         self.batch_id = self.batch_list[idx].code.clone();
-        
+
         let url = "https://icourses.jlu.edu.cn/xsxk/elective/user";
         let mut params = HashMap::new();
         params.insert("batchId", &self.batch_id);
 
         let mut headers = HeaderMap::new();
         headers.insert("Authorization", HeaderValue::from_str(&self.token)?);
-        
-        let resp = self.client.post(url)
+
+        let resp = self
+            .client
+            .post(url)
             .headers(headers)
             .query(&params)
             .send()
             .await?;
 
         let resp: serde_json::Value = resp.json().await?;
-        
+
         if resp["code"] != 200 {
             println!("Set batchId failed");
             return Ok(());
@@ -246,13 +257,10 @@ impl ICourses {
         headers.insert("Authorization", HeaderValue::from_str(&self.token)?);
         headers.insert("batchId", HeaderValue::from_str(&self.batch_id)?);
 
-        let resp = self.client.post(url)
-            .headers(headers)
-            .send()
-            .await?;
+        let resp = self.client.post(url).headers(headers).send().await?;
 
         let resp_json: serde_json::Value = resp.json().await?;
-        
+
         if resp_json["code"] == 200 {
             self.selected_courses = serde_json::from_value(resp_json["data"].clone())?;
             Ok(())
@@ -269,13 +277,10 @@ impl ICourses {
         headers.insert("Authorization", HeaderValue::from_str(&self.token)?);
         headers.insert("batchId", HeaderValue::from_str(&self.batch_id)?);
 
-        let resp = self.client.post(url)
-            .headers(headers)
-            .send()
-            .await?;
+        let resp = self.client.post(url).headers(headers).send().await?;
 
         let resp_json: serde_json::Value = resp.json().await?;
-        
+
         if resp_json["code"] == 200 {
             self.favorite_courses = serde_json::from_value(resp_json["data"].clone())?;
             Ok(())
@@ -303,7 +308,9 @@ impl ICourses {
         params.insert("clazzId", class_id);
         params.insert("secretVal", secret_val);
 
-        let resp = self.client.post(url)
+        let resp = self
+            .client
+            .post(url)
             .headers(headers)
             .query(&params)
             .send()
@@ -358,7 +365,13 @@ impl ICourses {
             params.insert("clazzId", &class_id);
             params.insert("secretVal", &secret_val);
 
-            match client.post(url).headers(headers).query(&params).send().await {
+            match client
+                .post(url)
+                .headers(headers)
+                .query(&params)
+                .send()
+                .await
+            {
                 Ok(resp) => {
                     if let Ok(json) = resp.json::<serde_json::Value>().await {
                         let code = json["code"].as_i64().unwrap_or(0);
@@ -424,14 +437,17 @@ impl ICourses {
         self.get_favorite().await?;
 
         if !self.favorite_courses.is_empty() {
-            let current_status: Arc<Mutex<HashMap<String, String>>> = 
+            let current_status: Arc<Mutex<HashMap<String, String>>> =
                 Arc::new(Mutex::new(HashMap::new()));
 
             let mut tasks = Vec::new();
 
             for course in &self.favorite_courses {
                 let status = Arc::clone(&current_status);
-                status.lock().unwrap().insert(course.JXBID.clone(), "doing".to_string());
+                status
+                    .lock()
+                    .unwrap()
+                    .insert(course.JXBID.clone(), "doing".to_string());
 
                 for _ in 0..WORK_THREAD_COUNT {
                     let client = self.client.clone();
@@ -469,7 +485,7 @@ impl ICourses {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
-    
+
     if args.len() < 4 {
         println!("用法: {} 用户名 密码 批次ID <循环>", args[0]);
         return Ok(());
@@ -485,7 +501,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     loop {
         let mut icourses = ICourses::new(username.clone(), password.clone()).await?;
-        
+
         // 无限重试登录
         while !icourses.login().await? {
             println!("登录失败，重试中...");
@@ -496,7 +512,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         icourses.get_favorite().await?;
         icourses.print_favorite();
         icourses.fuck_my_favorite().await?;
-        
+
         icourses.get_select().await?;
         icourses.print_select();
         debug_request_count += 1;
@@ -505,7 +521,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if args.len() == 4 {
             break;
         }
-        
+
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
 
