@@ -153,8 +153,10 @@ impl RequestApi for NoWasmClient {
             .send()
             .await?;
 
-        let get_url = format!("https://icourses.jlu.edu.cn/xsxk/elective/grablessons?batchId={batch_id}");
-        self.client.get(&get_url)
+        let get_url =
+            format!("https://icourses.jlu.edu.cn/xsxk/elective/grablessons?batchId={batch_id}");
+        self.client
+            .get(&get_url)
             .header("Authorization", token)
             .header("Connection", "keep-alive")
             .send()
@@ -162,7 +164,6 @@ impl RequestApi for NoWasmClient {
 
         Ok(resp.json::<Value>().await?)
     }
-
 
     async fn get_selected_courses(&self, params: CourseQueryParams) -> Result<Value> {
         let url = "https://icourses.jlu.edu.cn/xsxk/elective/select";
