@@ -325,12 +325,12 @@ impl WasmClient {
 
         let body = json!({
             "original_url": "https://icourses.jlu.edu.cn/xsxk/sc/clazz/list",
-            "batch_id": params.batch_id
         });
 
         let resp = Self::build_request("POST", url)
             .await
             .header("Authorization", &params.token)
+            .header("BatchId", &params.batch_id)
             .json(&body)?
             .send()
             .await?;
