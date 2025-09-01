@@ -1,11 +1,11 @@
 #![allow(non_snake_case)]
 
-use aes::cipher::{block_padding::Pkcs7, generic_array::GenericArray, BlockEncryptMut, KeyInit};
 use aes::Aes128;
+use aes::cipher::{BlockEncryptMut, KeyInit, block_padding::Pkcs7, generic_array::GenericArray};
 use futures::future::join_all;
 use reqwest::{
-    header::{HeaderMap, HeaderValue},
     Client,
+    header::{HeaderMap, HeaderValue},
 };
 use serde::{Deserialize, Serialize};
 use std::fs;

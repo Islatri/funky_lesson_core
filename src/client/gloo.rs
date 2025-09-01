@@ -1,16 +1,16 @@
 //! WASM HTTP client implementation using gloo_net
-//! 
+//!
 //! This module provides HTTP functionality for WASM environments
 //! using the gloo_net crate for making HTTP requests via the browser's fetch API.
 
 use crate::error::{ErrorKind, Result};
 use gloo_net::http::{Request, RequestBuilder};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use web_sys::{RequestCredentials, RequestMode};
 
-use crate::model::dtos::{CourseQueryParams, CourseSelectParams,  LoginParams};
-use crate::interface::{HttpClient,RequestApi};
+use crate::interface::{HttpClient, RequestApi};
+use crate::model::dtos::{CourseQueryParams, CourseSelectParams, LoginParams};
 
 /// HTTP client for WASM environments using gloo_net
 #[derive(Debug, Clone)]
@@ -96,9 +96,7 @@ impl RequestApi for WasmClient {
                 })
             })
             .flatten()
-            .ok_or_else(|| {
-                ErrorKind::ParseError("Failed to extract AES key".to_string())
-            })?;
+            .ok_or_else(|| ErrorKind::ParseError("Failed to extract AES key".to_string()))?;
 
         Ok(key)
     }
@@ -135,10 +133,7 @@ impl RequestApi for WasmClient {
         query_params.insert("captcha", params.captcha);
         query_params.insert("uuid", params.uuid);
 
-        let resp = Request::post(login_url)
-            .query(query_params)
-            .send()
-            .await?;
+        let resp = Request::post(login_url).query(query_params).send().await?;
 
         resp.json::<Value>().await.map_err(Into::into)
     }
@@ -435,25 +430,37 @@ pub async fn set_batch_proxy(batch_id: &str, token: &str) -> Result<Value> {
 
 pub async fn get_selected_courses(token: &str, batch_id: &str) -> Result<Value> {
     let client = WasmClient;
-    let params = CourseQueryParams { token: token.to_string(), batch_id: batch_id.to_string() };
+    let params = CourseQueryParams {
+        token: token.to_string(),
+        batch_id: batch_id.to_string(),
+    };
     client.get_selected_courses(params).await
 }
 
 pub async fn get_selected_courses_proxy(token: &str, batch_id: &str) -> Result<Value> {
     let client = WasmClient;
-    let params = CourseQueryParams { token: token.to_string(), batch_id: batch_id.to_string() };
+    let params = CourseQueryParams {
+        token: token.to_string(),
+        batch_id: batch_id.to_string(),
+    };
     client.get_selected_courses_proxy(params).await
 }
 
 pub async fn get_favorite_courses(token: &str, batch_id: &str) -> Result<Value> {
     let client = WasmClient;
-    let params = CourseQueryParams { token: token.to_string(), batch_id: batch_id.to_string() };
+    let params = CourseQueryParams {
+        token: token.to_string(),
+        batch_id: batch_id.to_string(),
+    };
     client.get_favorite_courses(params).await
 }
 
 pub async fn get_favorite_courses_proxy(token: &str, batch_id: &str) -> Result<Value> {
     let client = WasmClient;
-    let params = CourseQueryParams { token: token.to_string(), batch_id: batch_id.to_string() };
+    let params = CourseQueryParams {
+        token: token.to_string(),
+        batch_id: batch_id.to_string(),
+    };
     client.get_favorite_courses_proxy(params).await
 }
 

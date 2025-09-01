@@ -1,7 +1,7 @@
 pub mod app;
+pub mod client;
 pub mod crypto;
 pub mod error;
-pub mod client;
 pub mod interface;
 pub mod model;
 

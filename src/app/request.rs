@@ -1,18 +1,17 @@
 //! No-WASM application implementation
-//! 
+//!
 //! This module contains the application logic for non-WASM environments,
 //! including both TUI and GUI implementations.
 
 use crate::{
+    client::request,
     crypto,
     error::{ErrorKind, Result},
-    client::request,
     model::structs::EnrollmentStatus,
 };
 use futures::future::join_all;
 use reqwest::Client;
 use std::{collections::HashMap, sync::Arc, time::Duration};
-
 
 #[cfg(all(feature = "no-wasm", feature = "tui"))]
 use std::sync::Mutex as StdMutex;
@@ -41,7 +40,8 @@ pub mod gui {
         // Encrypt password and login
         let encrypted_password = crypto::encrypt_password(password, &aes_key)?;
         let login_resp =
-            request::send_login_request(client, username, &encrypted_password, captcha, uuid).await?;
+            request::send_login_request(client, username, &encrypted_password, captcha, uuid)
+                .await?;
 
         if login_resp["code"] == 200 && login_resp["msg"] == "登录成功" {
             let token = login_resp["data"]["token"]
@@ -231,7 +231,8 @@ pub mod tui {
         // Encrypt password and login
         let encrypted_password = crypto::encrypt_password(password, &aes_key)?;
         let login_resp =
-            request::send_login_request(client, username, &encrypted_password, &captcha, &uuid).await?;
+            request::send_login_request(client, username, &encrypted_password, &captcha, &uuid)
+                .await?;
 
         if login_resp["code"] == 200 && login_resp["msg"] == "登录成功" {
             let token = login_resp["data"]["token"]
@@ -474,7 +475,7 @@ pub async fn set_batch(
 
     #[cfg(all(feature = "no-wasm", feature = "tui"))]
     tui::print_batch_info(&batch_list[batch_idx]);
-    
+
     Ok(batch_id)
 }
 

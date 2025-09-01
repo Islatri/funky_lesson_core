@@ -23,9 +23,9 @@ pub struct CourseInfo {
     pub secret_val: Option<String>,
 }
 
-    #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-    pub struct EnrollmentStatus {
-        pub total_requests: u32,
-        pub course_statuses: Vec<String>,
-        pub is_running: bool,
-    }
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct EnrollmentStatus {
+    pub total_requests: u32,
+    pub course_statuses: Vec<String>,
+    pub is_running: bool,
+}

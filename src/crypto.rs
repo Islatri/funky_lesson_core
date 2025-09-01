@@ -1,6 +1,6 @@
 use crate::error::{ErrorKind, Result};
-use aes::cipher::{block_padding::Pkcs7, generic_array::GenericArray, BlockEncryptMut, KeyInit};
 use aes::Aes128;
+use aes::cipher::{BlockEncryptMut, KeyInit, block_padding::Pkcs7, generic_array::GenericArray};
 
 type Aes128EcbEnc = ecb::Encryptor<Aes128>;
 
