@@ -13,7 +13,7 @@ pub fn encrypt_password(password: &str, aes_key: &[u8]) -> Result<String> {
 
     buf[..pt_len].copy_from_slice(srcs);
 
-    let ct = Aes128EcbEnc::new(key.into())
+    let ct = Aes128EcbEnc::new(key)
         .encrypt_padded_mut::<Pkcs7>(&mut buf, pt_len)
         .unwrap();
     let base64 = base64_simd::STANDARD;

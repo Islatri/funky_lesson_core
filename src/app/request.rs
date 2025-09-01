@@ -357,36 +357,36 @@ pub mod tui {
                     if status.get(&class_id) == Some(&"doing".to_string()) {
                         match (code, msg) {
                             (200, _) => {
-                                println!("选课成功 [{}]", name);
+                                println!("选课成功 [{name}]");
                                 status.insert(class_id.clone(), "done".to_string());
                                 break;
                             }
                             (500, "该课程已在选课结果中") => {
-                                println!("[{}] {}", name, msg);
+                                println!("[{name}] {msg}");
                                 status.insert(class_id.clone(), "done".to_string());
                                 break;
                             }
                             (500, "本轮次选课暂未开始") => {
-                                println!("[{}]本轮次选课暂未开始", name);
+                                println!("[{name}]本轮次选课暂未开始");
                                 continue;
                             }
                             (500, "课容量已满") => {
-                                println!("{}课容量已满", name);
+                                println!("{name}课容量已满");
                                 if !try_if_capacity_full {
                                     break;
                                 }
                                 continue;
                             }
                             (500, "参数校验不通过") => {
-                                println!("[{:?}]", json);
+                                println!("[{json:?}]");
                                 continue;
                             }
                             (401, _) => {
-                                println!("{}", msg);
+                                println!("{msg}");
                                 break;
                             }
                             _ => {
-                                println!("[{}]: 失败，重试中...", code);
+                                println!("[{code}]: 失败，重试中...");
                                 continue;
                             }
                         }
@@ -395,7 +395,7 @@ pub mod tui {
                     }
                 }
                 Err(e) => {
-                    println!("请求错误: {}，重试中...", e);
+                    println!("请求错误: {e}，重试中...");
                     tokio::time::sleep(Duration::from_millis(500)).await;
                     continue;
                 }

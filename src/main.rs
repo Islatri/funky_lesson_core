@@ -14,13 +14,13 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    println!("args: {:?}", args);
+    println!("args: {args:?}");
 
     let username = args[1].clone();
     let password = args[2].clone();
     let batch_idx: usize = args[3]
         .parse()
-        .map_err(|e| ErrorKind::ParseError(format!("Invalid batch index: {}", e)))?;
+        .map_err(|e| ErrorKind::ParseError(format!("Invalid batch index: {e}")))?;
     let mut debug_request_count = 0;
 
     loop {
@@ -31,7 +31,7 @@ async fn main() -> Result<()> {
                 client
             }
             Err(e) => {
-                eprintln!("Failed to create client: {}", e);
+                eprintln!("Failed to create client: {e}");
                 return Err(e);
             }
         };
@@ -44,7 +44,7 @@ async fn main() -> Result<()> {
                     break result;
                 }
                 Err(e) => {
-                    eprintln!("登录失败: {}，重试中...", e);
+                    eprintln!("登录失败: {e}，重试中...");
                     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                 }
             }
@@ -67,7 +67,7 @@ async fn main() -> Result<()> {
         print_courses(&selected_courses, &[]);
 
         debug_request_count += 1;
-        println!("DEBUG_REQUEST_COUNT: {}\n", debug_request_count);
+        println!("DEBUG_REQUEST_COUNT: {debug_request_count}\n");
 
         // 如果不是循环模式则退出
         if args.len() == 4 {

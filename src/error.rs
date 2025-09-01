@@ -78,14 +78,14 @@ impl std::fmt::Debug for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match *self {
             #[cfg(feature = "no-wasm")]
-            ErrorKind::ReqwestError(ref e) => write!(f, "ReqwestError: {:?}", e),
+            ErrorKind::ReqwestError(ref e) => write!(f, "ReqwestError: {e:?}"),
             #[cfg(feature = "wasm")]
             ErrorKind::GlooNetError(ref e) => write!(f, "GlooNetError: {:?}", e),
-            ErrorKind::SerdeJsonError(ref e) => write!(f, "SerdeJsonError: {:?}", e),
-            ErrorKind::Base64Error(ref e) => write!(f, "Base64Error: {:?}", e),
-            ErrorKind::StdIoError(ref e) => write!(f, "StdIoError: {:?}", e),
-            ErrorKind::ParseError(ref e) => write!(f, "ParseError: {:?}", e),
-            ErrorKind::CourseError(ref e) => write!(f, "CourseError: {:?}", e),
+            ErrorKind::SerdeJsonError(ref e) => write!(f, "SerdeJsonError: {e:?}"),
+            ErrorKind::Base64Error(ref e) => write!(f, "Base64Error: {e:?}"),
+            ErrorKind::StdIoError(ref e) => write!(f, "StdIoError: {e:?}"),
+            ErrorKind::ParseError(ref e) => write!(f, "ParseError: {e:?}"),
+            ErrorKind::CourseError(ref e) => write!(f, "CourseError: {e:?}"),
         }
     }
 }
@@ -94,14 +94,14 @@ impl std::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match *self {
             #[cfg(feature = "no-wasm")]
-            ErrorKind::ReqwestError(ref e) => write!(f, "ReqwestError: {:?}", e),
+            ErrorKind::ReqwestError(ref e) => write!(f, "ReqwestError: {e:?}"),
             #[cfg(feature = "wasm")]
             ErrorKind::GlooNetError(ref e) => write!(f, "GlooNetError: {:?}", e),
-            ErrorKind::SerdeJsonError(ref e) => write!(f, "SerdeJsonError: {:?}", e),
-            ErrorKind::Base64Error(ref e) => write!(f, "Base64Error: {:?}", e),
-            ErrorKind::StdIoError(ref e) => write!(f, "StdIoError: {:?}", e),
-            ErrorKind::ParseError(ref e) => write!(f, "ParseError: {:?}", e),
-            ErrorKind::CourseError(ref e) => write!(f, "CourseError: {:?}", e),
+            ErrorKind::SerdeJsonError(ref e) => write!(f, "SerdeJsonError: {e:?}"),
+            ErrorKind::Base64Error(ref e) => write!(f, "Base64Error: {e:?}"),
+            ErrorKind::StdIoError(ref e) => write!(f, "StdIoError: {e:?}"),
+            ErrorKind::ParseError(ref e) => write!(f, "ParseError: {e:?}"),
+            ErrorKind::CourseError(ref e) => write!(f, "CourseError: {e:?}"),
         }
     }
 }

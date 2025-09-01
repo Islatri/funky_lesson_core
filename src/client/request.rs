@@ -47,7 +47,7 @@ impl RequestApi for NoWasmClient {
                         );
                         if attempt == 3 {
                             return Err(
-                                ErrorKind::ParseError(format!("HTTP error: {}", status)).into()
+                                ErrorKind::ParseError(format!("HTTP error: {status}")).into()
                             );
                         }
                         continue;
@@ -56,7 +56,7 @@ impl RequestApi for NoWasmClient {
                     let html = match resp.text().await {
                         Ok(html) => html,
                         Err(e) => {
-                            eprintln!("Failed to read response text: {}", e);
+                            eprintln!("Failed to read response text: {e}");
                             if attempt == 3 {
                                 return Err(e.into());
                             }
@@ -85,7 +85,7 @@ impl RequestApi for NoWasmClient {
                     return Ok(key);
                 }
                 Err(e) => {
-                    eprintln!("Network error (attempt {}/3): {}", attempt, e);
+                    eprintln!("Network error (attempt {attempt}/3): {e}");
                     if attempt == 3 {
                         return Err(e.into());
                     }
@@ -153,7 +153,7 @@ impl RequestApi for NoWasmClient {
             .send()
             .await?;
 
-        let get_url = format!("https://icourses.jlu.edu.cn/xsxk/elective/grablessons?batchId={}", batch_id);
+        let get_url = format!("https://icourses.jlu.edu.cn/xsxk/elective/grablessons?batchId={batch_id}");
         self.client.get(&get_url)
             .header("Authorization", token)
             .header("Connection", "keep-alive")

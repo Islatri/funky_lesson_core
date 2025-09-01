@@ -1,0 +1,81 @@
+name: CI
+
+# 仅在推送到main分支和PR时运行，节约资源
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # 快速检查 - 仅检查代码格式和基本编译
+  quick-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Check compilation
+        run: cargo check --all-targets
+
+      - name: Run clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Run tests
+        run: cargo test
+
+  # 检查是否可以成功构建（但不实际构建全部平台，节约资源）
+  build-check:
+    runs-on: ubuntu-latest
+    needs: quick-check
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build release (Linux only for CI)
+        run: cargo build --release
+
+      - name: CI Summary
+        run: |
+          echo "## ✅ CI检查通过!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔍 检查项目:" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ 代码格式检查 (rustfmt)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ 代码质量检查 (clippy)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ 编译检查" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ 单元测试" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ 发布版本构建测试" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🚀 代码已准备好进行发布! 创建版本标签 (如 v0.1.1) 即可触发自动发布。" >> $GITHUB_STEP_SUMMARY
