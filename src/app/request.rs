@@ -318,6 +318,7 @@ pub mod tui {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn course_enrollment_worker(
         client: Client,
         token: String,

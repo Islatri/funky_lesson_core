@@ -31,6 +31,7 @@ impl HttpClient for NoWasmClient {
 }
 
 impl RequestApi for NoWasmClient {
+    #[allow(clippy::sliced_string_as_bytes)]
     async fn get_aes_key(&self) -> Result<Vec<u8>> {
         let index_url = "https://icourses.jlu.edu.cn/";
 
