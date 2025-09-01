@@ -9,6 +9,12 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+# 添加必要的权限
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
 jobs:
   # 创建GitHub Release
   create-release:
@@ -17,18 +23,19 @@ jobs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
       version: ${{ steps.get_version.outputs.version }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Get version from tag
         id: get_version
         run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
       - name: Create Release
         id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.get_version.outputs.version }}
-          release_name: Release ${{ steps.get_version.outputs.version }}
+          name: Release ${{ steps.get_version.outputs.version }}
           body: |
             ## 🚀 Funky Lesson Core ${{ steps.get_version.outputs.version }}
             
@@ -53,10 +60,11 @@ jobs:
             - 本软件仅供学习研究使用，请遵守相关法律法规
           draft: false
           prerelease: false
+          generate_release_notes: true
 
   # 构建多平台可执行文件
   build:
-    needs: create-release
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -72,8 +80,6 @@ jobs:
           - os: macos-latest
             target: x86_64-apple-darwin
             name: funky_lesson_core-macos
-
-    runs-on: ${{ matrix.os }}
     
     steps:
       - name: Checkout code
@@ -85,7 +91,7 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Cache cargo registry
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -110,15 +116,16 @@ jobs:
         run: |
           copy target\${{ matrix.target }}\release\funky_lesson_core.exe ${{ matrix.name }}
 
+      - name: Get version from tag
+        id: get_version
+        shell: bash
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
       - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./${{ matrix.name }}
-          asset_name: ${{ matrix.name }}
-          asset_content_type: application/octet-stream
+          tag_name: ${{ steps.get_version.outputs.version }}
+          files: ./${{ matrix.name }}
 
   # 构建完成后的通知
   notify-completion:
@@ -126,13 +133,17 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     steps:
+      - name: Get version from tag
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
       - name: Release Summary
         run: |
-          echo "## 🎉 Release ${{ needs.create-release.outputs.version }} 构建完成!" >> $GITHUB_STEP_SUMMARY
+          echo "## 🎉 Release ${{ steps.get_version.outputs.version }} 构建完成!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📦 可执行文件已发布:" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Windows x64: funky_lesson_core-windows.exe" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ macOS x64: funky_lesson_core-macos" >> $GITHUB_STEP_SUMMARY  
           echo "- ✅ Linux x64: funky_lesson_core-linux" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "🔗 [查看发布页面](https://github.com/${{ github.repository }}/releases/tag/${{ needs.create-release.outputs.version }})" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 [查看发布页面](https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_version.outputs.version }})" >> $GITHUB_STEP_SUMMARY
