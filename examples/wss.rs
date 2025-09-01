@@ -15,6 +15,8 @@ use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
+use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
+use futures_util::{SinkExt, StreamExt};
 
 type Aes128EcbEnc = ecb::Encryptor<Aes128>;
 const WORK_THREAD_COUNT: usize = 8;
@@ -109,6 +111,76 @@ impl ICourses {
         })
     }
 
+    // WebSocket心跳维护函数
+    async fn maintain_websocket_heartbeat(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let ws_url = format!("wss://icourses.jlu.edu.cn/xsxk/websocket/{}", self.login_name);
+        
+        println!("正在连接WebSocket: {}", ws_url);
+
+        let request = tokio_tungstenite::tungstenite::handshake::client::Request::builder()
+            .uri(&ws_url)
+            .header("Origin", "https://icourses.jlu.edu.cn")
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36")
+            .header("Cookie", format!("Authorization={}", self.token))
+            .body(())?;
+
+        match connect_async(request).await {
+            Ok((ws_stream, _)) => {
+                println!("✅ WebSocket连接成功！");
+                let (mut write, mut read) = ws_stream.split();
+
+                // 启动心跳发送任务
+                let heartbeat_task = tokio::spawn(async move {
+                    let mut interval = tokio::time::interval(Duration::from_secs(5)); // 每5秒发送一次心跳
+                    loop {
+                        interval.tick().await;
+                        if let Err(e) = write.send(Message::Text("hi".to_string().into())).await {
+                            println!("❌ WebSocket心跳发送失败: {}", e);
+                            break;
+                        }
+                        println!("💓 WebSocket心跳已发送: hi");
+                    }
+                });
+
+                // 启动消息接收任务
+                let receive_task = tokio::spawn(async move {
+                    while let Some(msg) = read.next().await {
+                        match msg {
+                            Ok(Message::Text(text)) => {
+                                println!("📨 WebSocket收到响应: {}", text);
+                            }
+                            Ok(Message::Close(_)) => {
+                                println!("🔒 WebSocket连接已关闭");
+                                break;
+                            }
+                            Err(e) => {
+                                println!("❌ WebSocket接收消息错误: {}", e);
+                                break;
+                            }
+                            _ => {}
+                        }
+                    }
+                });
+
+                // 等待任一任务完成
+                tokio::select! {
+                    _ = heartbeat_task => {
+                        println!("💔 心跳任务结束");
+                    }
+                    _ = receive_task => {
+                        println!("📭 接收任务结束");
+                    }
+                }
+            }
+            Err(e) => {
+                println!("❌ WebSocket连接失败: {}", e);
+                return Err(e.into());
+            }
+        }
+
+        Ok(())
+    }
+
     async fn login(&mut self) -> Result<bool, Box<dyn std::error::Error>> {
         // Get AES key from index page
         let index_url = "https://icourses.jlu.edu.cn/";
@@ -146,9 +218,6 @@ impl ICourses {
         let captcha = captcha.trim().to_string();
 
         // Encrypt password
-        // let cipher = Aes128Cbc::new_from_slices(&self.aes_key, &[0u8; 16])?;
-        // let encrypted = cipher.encrypt_vec(self.password.as_bytes());
-
         let srcs = self.password.as_bytes();
         let key = GenericArray::from_slice(&self.aes_key);
         let mut buf = [0u8; 128];
@@ -174,7 +243,6 @@ impl ICourses {
         let resp = self
             .client
             .post(login_url)
-            // .json(&params)
             .query(&params)
             .send()
             .await?;
@@ -191,6 +259,7 @@ impl ICourses {
                 println!("XH: {}", data.student.XH);
                 println!("XM: {}", data.student.XM);
                 println!("ZYMC: {}", data.student.ZYMC);
+                println!("学号(login_name): {}", self.login_name);
                 println!("=====================================");
 
                 for batch in &self.batch_list {
@@ -262,9 +331,10 @@ impl ICourses {
 
         if resp_json["code"] == 200 {
             self.selected_courses = serde_json::from_value(resp_json["data"].clone())?;
+            println!("✅ 成功获取已选课程列表，共 {} 门课程", self.selected_courses.len());
             Ok(())
         } else {
-            println!("获取已选课程失败: {}", resp_json["msg"]);
+            println!("❌ 获取已选课程失败: {}", resp_json["msg"]);
             Err("获取已选课程失败".into())
         }
     }
@@ -273,7 +343,7 @@ impl ICourses {
     async fn get_favorite(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let url = "https://icourses.jlu.edu.cn/xsxk/sc/clazz/list";
         let mut headers = HeaderMap::new();
-        // println!("Authorization: {}", &self.token);
+        println!("Authorization: {}", &self.token);
         headers.insert("Authorization", HeaderValue::from_str(&self.token)?);
         headers.insert("batchId", HeaderValue::from_str(&self.batch_id)?);
 
@@ -283,9 +353,10 @@ impl ICourses {
 
         if resp_json["code"] == 200 {
             self.favorite_courses = serde_json::from_value(resp_json["data"].clone())?;
+            println!("✅ 成功获取收藏课程列表，共 {} 门课程", self.favorite_courses.len());
             Ok(())
         } else {
-            println!("获取收藏课程失败: {}", resp_json["msg"]);
+            println!("❌ 获取收藏课程失败: {}", resp_json["msg"]);
             Err("获取收藏课程失败".into())
         }
     }
@@ -380,42 +451,41 @@ impl ICourses {
                         let mut status = current_status.lock().unwrap();
                         if status.get(&class_id) == Some(&"doing".to_string()) {
                             if code == 200 {
-                                println!("选课成功 [{}]", name);
+                                println!("✅ 选课成功 [{}]", name);
                                 status.insert(class_id.clone(), "done".to_string());
                                 break;
                             } else if code == 500 {
                                 match msg {
                                     "该课程已在选课结果中" => {
-                                        println!("[{}] {}", name, msg);
+                                        println!("ℹ️ [{}] {}", name, msg);
                                         status.insert(class_id.clone(), "done".to_string());
                                         break;
                                     }
                                     "本轮次选课暂未开始" => {
-                                        println!("[{}]本轮次选课暂未开始", name);
+                                        println!("⏰ [{}]本轮次选课暂未开始", name);
                                         continue;
                                     }
                                     "课容量已满" => {
-                                        println!("{}课容量已满", name);
+                                        println!("😞 {}课容量已满", name);
                                         if !try_if_capacity_full {
                                             break;
                                         }
                                         continue;
                                     }
                                     "参数校验不通过" => {
-                                        println!("[{:?}]", json);
-                                        // [Object {"code": Number(500), "data": Null, "msg": String("参数校验不通过")}]
+                                        println!("❌ [{:?}]", json);
                                         continue;
                                     }
                                     _ => {
-                                        println!("[{}] {}", name, msg);
+                                        println!("⚠️ [{}] {}", name, msg);
                                         continue;
                                     }
                                 }
                             } else if code == 401 {
-                                println!("{}", msg);
+                                println!("🔐 {}", msg);
                                 break;
                             } else {
-                                println!("[{}]: 失败，重试中...", code);
+                                println!("🔄 [{}]: 失败，重试中...", code);
                                 continue;
                             }
                         } else {
@@ -424,7 +494,7 @@ impl ICourses {
                     }
                 }
                 Err(e) => {
-                    println!("请求错误: {}，重试中...", e);
+                    println!("🌐 请求错误: {}，重试中...", e);
                     tokio::time::sleep(Duration::from_millis(500)).await;
                     continue;
                 }
@@ -475,7 +545,7 @@ impl ICourses {
             }
 
             join_all(tasks).await;
-            println!("本轮抢课结束，继续检查...");
+            println!("🎯 本轮抢课结束，继续检查...");
         }
 
         Ok(())
@@ -491,9 +561,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    // 打印arg
-    println!("args: {:?}", args);
-
     let username = args[1].clone();
     let password = args[2].clone();
     let batch_id: usize = args[3].parse()?;
@@ -504,11 +571,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // 无限重试登录
         while !icourses.login().await? {
-            println!("登录失败，重试中...");
+            println!("🔄 登录失败，重试中...");
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
 
         icourses.set_batch_id(batch_id).await?;
+
+        // 启动WebSocket心跳（在后台运行）
+        let icourses_clone = icourses.clone();
+        let websocket_task = tokio::spawn(async move {
+            if let Err(e) = icourses_clone.maintain_websocket_heartbeat().await {
+                println!("💔 WebSocket心跳维护失败: {}", e);
+            }
+        });
+
+        // 等待一小段时间确保WebSocket连接建立
+        println!("⏳ 等待WebSocket连接建立...");
+        tokio::time::sleep(Duration::from_millis(3000)).await;
+
         icourses.get_favorite().await?;
         icourses.print_favorite();
         icourses.fuck_my_favorite().await?;
@@ -516,9 +596,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         icourses.get_select().await?;
         icourses.print_select();
         debug_request_count += 1;
-        println!("DEBUG_REQUEST_COUNT: {}\n", debug_request_count);
+        println!("🔢 DEBUG_REQUEST_COUNT: {}\n", debug_request_count);
 
         if args.len() == 4 {
+            // 在退出前终止WebSocket任务
+            websocket_task.abort();
             break;
         }
 

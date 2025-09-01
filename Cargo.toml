@@ -14,6 +14,11 @@ serde_json = "1.0.143"
 tokio = { version = "1.47.1", features = ["sync","rt-multi-thread","time","macros"], optional = true  }
 reqwest = { version = "0.12.23", default-features = false, features = ["rustls-tls","json", "cookies"] , optional = true }
 futures = {version="0.3.31",optional=true}
+futures-util = {version="0.3.31",optional=true}
+tokio-tungstenite = {version = "0.27.0", optional = true, features = ["rustls-tls-webpki-roots"]}
+rustls = {version = "0.23.31", optional = true}
+webpki-roots = {version = "1.0.2", optional = true}
+url =  {version = "2.5.7", optional = true}
 
 gloo-net = { version = "0.6.0",optional = true}
 js-sys = { version ="0.3.77",optional = true}
@@ -27,7 +32,7 @@ log ={ version = "0.4.27", optional = true }
 default = ["no-wasm","tui"]
 tui = []
 gui = []
-no-wasm = ["tokio","reqwest","futures"]
+no-wasm = ["tokio","reqwest","futures","futures-util","tokio-tungstenite","rustls","webpki-roots","url"]
 wasm = ["wasm-bindgen","wasm-bindgen-futures","gloo-net","web-sys","js-sys","serde-wasm-bindgen","log"]
 proxy = []
 
