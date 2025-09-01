@@ -387,6 +387,7 @@ dependencies = [
  "gloo-net",
  "js-sys",
  "log",
+ "rand 0.9.2",
  "reqwest",
  "rustls",
  "serde",
