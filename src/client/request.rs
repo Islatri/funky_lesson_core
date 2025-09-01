@@ -184,9 +184,17 @@ impl RequestApi for NoWasmClient {
                 .map_err(|e| ErrorKind::ParseError(e.to_string()))?,
         );
         headers.insert(
-            "batchId",
+            "BatchId",
             HeaderValue::from_str(&params.batch_id)
                 .map_err(|e| ErrorKind::ParseError(e.to_string()))?,
+        );
+        headers.insert(
+            "Referer",
+            HeaderValue::from_str(&format!(
+                "https://icourses.jlu.edu.cn/xsxk/elective/grablessons?batchId={}",
+                params.batch_id
+            ))
+            .map_err(|e| ErrorKind::ParseError(e.to_string()))?,
         );
 
         let resp = self.client.post(url).headers(headers).send().await?;

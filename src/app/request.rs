@@ -3,11 +3,12 @@
 //! This module contains the application logic for non-WASM environments,
 //! including both TUI and GUI implementations.
 
+#[cfg(all(feature = "no-wasm", feature = "gui"))]
+use crate::model::structs::EnrollmentStatus;
 use crate::{
     client::request,
     crypto,
     error::{ErrorKind, Result},
-    model::structs::EnrollmentStatus,
 };
 use futures::future::join_all;
 use reqwest::Client;

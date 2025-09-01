@@ -2,10 +2,6 @@
 
 Rust写的吉林大学抢课脚本
 
-## ⚠ 抢修中
-
-2025年9月1日，下午3：40；由于吉林大学选课系统变更，原先爬取的接口目前无法获取到收藏夹课程（暂时猜测是增加了一个wss心跳的缘故），FunkyLesson 目前无法正常工作。我们正在紧急修复中，修复时间未知，请耐心等待。
-
 ![funky_lesson_core GIF演示，没显示的话检查一下网络环境或者用电脑浏览器打开](./funky-lesson-core.gif)
 
 [funky-lesson](https://github.com/ZoneHerobrine/funky-lesson)的核心库部分,GUI已经写好啦！基于Leptos+Actix+Tauri的纯Rust实现！目前0.0.4版本的开箱即用exe可以在release里面找到，点击[这里](https://github.com/ZoneHerobrine/funky-lesson/releases/tag/release)

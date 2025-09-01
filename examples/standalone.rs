@@ -246,6 +246,17 @@ impl ICourses {
         println!("EndTime: {}", batch.end_time);
         println!("=====================================");
 
+        // Get请求
+
+        let url = format!(
+            "https://icourses.jlu.edu.cn/xsxk/elective/grablessons?batchId={}",
+            &self.batch_id
+        );
+        let mut headers = HeaderMap::new();
+        headers.insert("Authorization", HeaderValue::from_str(&self.token)?);
+        headers.insert("Connection", HeaderValue::from_str("keep-alive")?);
+        self.client.get(&url).headers(headers).send().await?;
+
         Ok(())
     }
 
@@ -254,13 +265,22 @@ impl ICourses {
         let url = "https://icourses.jlu.edu.cn/xsxk/elective/select";
         let mut headers = HeaderMap::new();
         headers.insert("Authorization", HeaderValue::from_str(&self.token)?);
-        headers.insert("batchId", HeaderValue::from_str(&self.batch_id)?);
+        // headers.insert("BatchId", HeaderValue::from_str(&self.batch_id)?);
+        headers.insert(
+            "Referer",
+            HeaderValue::from_str(&format!(
+                "https://icourses.jlu.edu.cn/xsxk/elective/grablessons?batchId={}",
+                &self.batch_id
+            ))?,
+        );
 
         let resp = self.client.post(url).headers(headers).send().await?;
 
+        // println!("Response: {}", resp.status());
         let resp_json: serde_json::Value = resp.json().await?;
 
         if resp_json["code"] == 200 {
+            // println!("Data: {}", resp_json["data"]);
             self.selected_courses = serde_json::from_value(resp_json["data"].clone())?;
             Ok(())
         } else {
@@ -275,13 +295,21 @@ impl ICourses {
         let mut headers = HeaderMap::new();
         // println!("Authorization: {}", &self.token);
         headers.insert("Authorization", HeaderValue::from_str(&self.token)?);
-        headers.insert("batchId", HeaderValue::from_str(&self.batch_id)?);
-
+        // headers.insert("BatchId", HeaderValue::from_str(&self.batch_id)?);
+        headers.insert(
+            "Referer",
+            HeaderValue::from_str(&format!(
+                "https://icourses.jlu.edu.cn/xsxk/elective/grablessons?batchId={}",
+                &self.batch_id
+            ))?,
+        );
+        // headers.insert("Origin", HeaderValue::from_str("https://icourses.jlu.edu.cn")?);
         let resp = self.client.post(url).headers(headers).send().await?;
 
         let resp_json: serde_json::Value = resp.json().await?;
 
         if resp_json["code"] == 200 {
+            // println!("Data: {}", resp_json["data"]);
             self.favorite_courses = serde_json::from_value(resp_json["data"].clone())?;
             Ok(())
         } else {
@@ -322,22 +350,30 @@ impl ICourses {
     // 打印已选课程
     fn print_select(&self) {
         println!("==================已选课程==================");
-        for course in &self.selected_courses {
-            println!(
-                "教师: {:<10}课程: {:<20}ID: {:<30}",
-                course.SKJS, course.KCM, course.JXBID
-            );
+        if self.selected_courses.is_empty() {
+            println!("没有已选课程");
+        } else {
+            for course in &self.selected_courses {
+                println!(
+                    "教师: {:<10}课程: {:<20}ID: {:<30}",
+                    course.SKJS, course.KCM, course.JXBID
+                );
+            }
         }
     }
 
     // 打印收藏课程
     fn print_favorite(&self) {
         println!("==================收藏课程==================");
-        for course in &self.favorite_courses {
-            println!(
-                "教师: {:<10}课程: {:<20}ID: {:<30}类型: {:<10}",
-                course.SKJS, course.KCM, course.JXBID, course.teaching_class_type
-            );
+        if self.favorite_courses.is_empty() {
+            println!("没有收藏课程");
+        } else {
+            for course in &self.favorite_courses {
+                println!(
+                    "教师: {:<10}课程: {:<20}ID: {:<30}类型: {:<10}",
+                    course.SKJS, course.KCM, course.JXBID, course.teaching_class_type
+                );
+            }
         }
         println!("============================================");
     }
@@ -509,6 +545,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         icourses.set_batch_id(batch_id).await?;
+
         icourses.get_favorite().await?;
         icourses.print_favorite();
         icourses.fuck_my_favorite().await?;

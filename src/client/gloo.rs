@@ -297,7 +297,19 @@ impl WasmClient {
             .send()
             .await?;
 
+        // await client.HttpGetAsync("xsxk/elective/grablessons?batchId=" + batch.batchId);
+        let get_url = format!("http://127.0.0.1:3030/api/proxy/elective/grablessons?batchId={}", batch_id);
+        Self::build_request("GET", &get_url)
+            .await
+            .header("Authorization", token)
+            .header("Connection", "keep-alive")
+            .send()
+            .await?;
+
         Self::handle_json_response(resp).await
+
+
+
     }
 
     /// Get selected courses via proxy server

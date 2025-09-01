@@ -3,6 +3,7 @@
 use aes::Aes128;
 use aes::cipher::{BlockEncryptMut, KeyInit, block_padding::Pkcs7, generic_array::GenericArray};
 use futures::future::join_all;
+use futures_util::{SinkExt, StreamExt};
 use reqwest::{
     Client,
     header::{HeaderMap, HeaderValue},
@@ -16,7 +17,6 @@ use std::{
     time::Duration,
 };
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
-use futures_util::{SinkExt, StreamExt};
 
 type Aes128EcbEnc = ecb::Encryptor<Aes128>;
 const WORK_THREAD_COUNT: usize = 8;
@@ -113,8 +113,11 @@ impl ICourses {
 
     // WebSocket心跳维护函数
     async fn maintain_websocket_heartbeat(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let ws_url = format!("wss://icourses.jlu.edu.cn/xsxk/websocket/{}", self.login_name);
-        
+        let ws_url = format!(
+            "wss://icourses.jlu.edu.cn/xsxk/websocket/{}",
+            self.login_name
+        );
+
         println!("正在连接WebSocket: {}", ws_url);
 
         let request = tokio_tungstenite::tungstenite::handshake::client::Request::builder()
@@ -240,12 +243,7 @@ impl ICourses {
         params.insert("captcha", &captcha);
         params.insert("uuid", &captcha_data.data.uuid);
 
-        let resp = self
-            .client
-            .post(login_url)
-            .query(&params)
-            .send()
-            .await?;
+        let resp = self.client.post(login_url).query(&params).send().await?;
 
         let login_resp: LoginResponse = resp.json().await?;
 
@@ -331,7 +329,10 @@ impl ICourses {
 
         if resp_json["code"] == 200 {
             self.selected_courses = serde_json::from_value(resp_json["data"].clone())?;
-            println!("✅ 成功获取已选课程列表，共 {} 门课程", self.selected_courses.len());
+            println!(
+                "✅ 成功获取已选课程列表，共 {} 门课程",
+                self.selected_courses.len()
+            );
             Ok(())
         } else {
             println!("❌ 获取已选课程失败: {}", resp_json["msg"]);
@@ -353,7 +354,10 @@ impl ICourses {
 
         if resp_json["code"] == 200 {
             self.favorite_courses = serde_json::from_value(resp_json["data"].clone())?;
-            println!("✅ 成功获取收藏课程列表，共 {} 门课程", self.favorite_courses.len());
+            println!(
+                "✅ 成功获取收藏课程列表，共 {} 门课程",
+                self.favorite_courses.len()
+            );
             Ok(())
         } else {
             println!("❌ 获取收藏课程失败: {}", resp_json["msg"]);
