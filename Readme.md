@@ -32,13 +32,13 @@
 - **HTTP客户端**: Reqwest (支持 rustls-tls)
 - **加密算法**: AES-128-ECB
 - **序列化**: Serde + JSON
-- **GUI版本**: 基于 Leptos + Actix + Tauri 的纯 Rust 实现
+- **GUI版本**: FunkyLesson 基于 Leptos + Actix + Tauri 的纯 Rust 实现
 
 ### 📦 GUI版本
 
 完整的图形界面版本已经发布！
 
-- 🎯 **下载地址**: [Release v0.0.4](https://github.com/ZoneHerobrine/funky-lesson/releases/tag/release)
+- 🎯 **下载地址**: [FunkyLesson Release](https://github.com/ZoneHerobrine/funky-lesson/releases/tag/release)
 - 🖥️ **技术栈**: Leptos + Actix + Tauri
 - 📱 **开箱即用**: 无需配置环境，下载即可使用
 
@@ -72,7 +72,7 @@
 
 - 📦 **Rust环境**: 请先安装 Rust 工具链
   - 官方安装指南: [https://www.rust-lang.org/learn/get-started](https://www.rust-lang.org/learn/get-started)
-  - 推荐版本: Rust 1.70.0 或更高版本
+  - 推荐版本: Rust 1.85.0 或更高版本
 
 #### 运行步骤
 
@@ -160,17 +160,6 @@ funky_lesson_core.exe 114514 1919810 0
 - `tui`: 命令行界面
 - `gui`: 图形界面支持
 - `proxy`: 代理支持
-
-### 核心模块
-
-```rust
-// 基础使用示例
-use funky_lesson_core::{
-    client::LessonClient,
-    model::LoginRequest,
-    interface::ClientInterface,
-};
-```
 
 ## ⚠️ 重要提醒
 
