@@ -1,7 +1,9 @@
 pub mod app;
 pub mod crypto;
 pub mod error;
-pub mod request;
+pub mod client;
+pub mod interface;
+pub mod model;
 
 #[cfg(feature = "no-wasm")]
 pub use reqwest::Client;

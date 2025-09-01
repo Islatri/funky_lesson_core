@@ -4,40 +4,15 @@
 //! login, course management, and enrollment logic, with platform-specific
 //! implementations for WASM and no-WASM environments.
 
-use serde::{Deserialize, Serialize};
-
-// Common data structures used across all platforms
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct BatchInfo {
-    pub code: String,
-    pub name: String,
-    #[serde(rename = "beginTime")]
-    pub begin_time: String,
-    #[serde(rename = "endTime")]
-    pub end_time: String,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[allow(non_snake_case)] // API字段名与服务器保持一致
-pub struct CourseInfo {
-    pub SKJS: String,  // 教师名
-    pub KCM: String,   // 课程名
-    pub JXBID: String, // 教学班ID
-    #[serde(rename = "teachingClassType")]
-    pub teaching_class_type: Option<String>,
-    #[serde(default, rename = "secretVal")]
-    pub secret_val: Option<String>,
-}
-
 // Platform-specific modules
 #[cfg(feature = "no-wasm")]
-pub mod no_wasm;
+pub mod request;
 #[cfg(feature = "no-wasm")]
-pub use no_wasm::*;
+pub use request::*;
 
 #[cfg(feature = "wasm")]
-pub mod wasm;
+pub mod gloo;
 #[cfg(feature = "wasm")]
-pub use wasm::*;
+pub use gloo::*;
 
 // Re-export common data structures

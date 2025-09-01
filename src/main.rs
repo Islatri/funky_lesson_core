@@ -1,6 +1,6 @@
 use funky_lesson_core::app::{enroll_courses, get_courses, login, print_courses, set_batch};
 use funky_lesson_core::error::{ErrorKind, Result};
-use funky_lesson_core::request::create_client;
+use funky_lesson_core::client::request::create_client;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -24,13 +24,27 @@ async fn main() -> Result<()> {
     let mut debug_request_count = 0;
 
     loop {
-        let client = create_client().await?;
+        println!("Creating client...");
+        let client = match create_client().await {
+            Ok(client) => {
+                println!("Client created successfully");
+                client
+            },
+            Err(e) => {
+                eprintln!("Failed to create client: {}", e);
+                return Err(e);
+            }
+        };
 
         let (token, batch_list) = loop {
+            println!("Attempting login...");
             match login(&client, &username, &password).await {
-                Ok(result) => break result,
+                Ok(result) => {
+                    println!("Login successful");
+                    break result
+                },
                 Err(e) => {
-                    println!("登录失败: {}，重试中...", e);
+                    eprintln!("登录失败: {}，重试中...", e);
                     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                 }
             }

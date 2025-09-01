@@ -15,7 +15,6 @@ use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
-use tokio;
 
 type Aes128EcbEnc = ecb::Encryptor<Aes128>;
 const WORK_THREAD_COUNT: usize = 8;

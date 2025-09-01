@@ -6,18 +6,20 @@
 use crate::{
     crypto,
     error::{ErrorKind, Result},
-    request,
+    client::request,
+    model::structs::EnrollmentStatus,
 };
 use futures::future::join_all;
 use reqwest::Client;
 use std::{collections::HashMap, sync::Arc, time::Duration};
+
 
 #[cfg(all(feature = "no-wasm", feature = "tui"))]
 use std::sync::Mutex as StdMutex;
 #[cfg(all(feature = "no-wasm", feature = "gui"))]
 use tokio::sync::Mutex as TokioMutex;
 
-use super::{BatchInfo, CourseInfo};
+use crate::model::structs::{BatchInfo, CourseInfo};
 
 const WORK_THREAD_COUNT: usize = 4;
 
@@ -25,13 +27,6 @@ const WORK_THREAD_COUNT: usize = 4;
 #[cfg(all(feature = "no-wasm", feature = "gui"))]
 pub mod gui {
     use super::*;
-
-    #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-    pub struct EnrollmentStatus {
-        pub total_requests: u32,
-        pub course_statuses: Vec<String>,
-        pub is_running: bool,
-    }
 
     pub async fn login(
         client: &Client,
@@ -223,7 +218,7 @@ pub mod tui {
 
         // Get and save captcha
         let (uuid, captcha_b64) = request::get_captcha(client).await?;
-        let captcha_img = crypto::decode_captcha_image(&captcha_b64)?;
+        let captcha_img: Vec<u8> = crypto::decode_captcha_image(&captcha_b64)?;
         std::fs::write("captcha.png", captcha_img)?;
 
         // Get captcha input

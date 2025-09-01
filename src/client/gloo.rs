@@ -9,7 +9,8 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use web_sys::{RequestCredentials, RequestMode};
 
-use super::{CourseQueryParams, CourseSelectParams, HttpClient, LoginParams, RequestApi};
+use crate::model::dtos::{CourseQueryParams, CourseSelectParams,  LoginParams};
+use crate::interface::{HttpClient,RequestApi};
 
 /// HTTP client for WASM environments using gloo_net
 #[derive(Debug, Clone)]
@@ -69,8 +70,8 @@ impl RequestApi for WasmClient {
             .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
             .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-            .header("Origin", "http://localhost:1420")
-            .header("Referer", "http://localhost:1420/")
+            .header("Origin", "http://127.0.0.1:1420")
+            .header("Referer", "http://127.0.0.1:1420/")
             .send()
             .await?;
 
@@ -125,7 +126,7 @@ impl RequestApi for WasmClient {
         Ok((uuid, captcha))
     }
 
-    async fn send_login_request(&self, params: LoginParams<'_>) -> Result<Value> {
+    async fn send_login_request(&self, params: LoginParams) -> Result<Value> {
         let login_url = "https://icourses.jlu.edu.cn/xsxk/auth/login";
 
         let mut query_params = HashMap::new();
@@ -164,31 +165,31 @@ impl RequestApi for WasmClient {
         Ok(json!({"code": 200, "status": "sent"}))
     }
 
-    async fn get_selected_courses(&self, params: CourseQueryParams<'_>) -> Result<Value> {
+    async fn get_selected_courses(&self, params: CourseQueryParams) -> Result<Value> {
         let url = "https://icourses.jlu.edu.cn/xsxk/elective/select";
 
         let resp = Request::post(url)
-            .header("Authorization", params.token)
-            .header("batchId", params.batch_id)
+            .header("Authorization", &params.token)
+            .header("batchId", &params.batch_id)
             .send()
             .await?;
 
         resp.json::<Value>().await.map_err(Into::into)
     }
 
-    async fn get_favorite_courses(&self, params: CourseQueryParams<'_>) -> Result<Value> {
+    async fn get_favorite_courses(&self, params: CourseQueryParams) -> Result<Value> {
         let url = "https://icourses.jlu.edu.cn/xsxk/sc/clazz/list";
 
         let resp = Request::post(url)
-            .header("Authorization", params.token)
-            .header("batchId", params.batch_id)
+            .header("Authorization", &params.token)
+            .header("batchId", &params.batch_id)
             .send()
             .await?;
 
         resp.json::<Value>().await.map_err(Into::into)
     }
 
-    async fn select_course(&self, params: CourseSelectParams<'_>) -> Result<Value> {
+    async fn select_course(&self, params: CourseSelectParams) -> Result<Value> {
         let url = "https://icourses.jlu.edu.cn/xsxk/sc/clazz/addxk";
 
         let mut query_params = HashMap::new();
@@ -197,8 +198,8 @@ impl RequestApi for WasmClient {
         query_params.insert("secretVal", params.secret_val);
 
         let resp = Request::post(url)
-            .header("Authorization", params.token)
-            .header("batchId", params.batch_id)
+            .header("Authorization", &params.token)
+            .header("batchId", &params.batch_id)
             .query(query_params)
             .send()
             .await?;
@@ -211,7 +212,7 @@ impl RequestApi for WasmClient {
 impl WasmClient {
     /// Get AES key via proxy server
     pub async fn get_aes_key_proxy(&self) -> Result<Vec<u8>> {
-        let url = "http://localhost:3030/api/proxy/profile/index.html";
+        let url = "http://127.0.0.1:3030/api/proxy/profile/index.html";
 
         let resp = Self::build_request("GET", url).await.send().await?;
 
@@ -237,7 +238,7 @@ impl WasmClient {
 
     /// Get captcha via proxy server
     pub async fn get_captcha_proxy(&self) -> Result<(String, String)> {
-        let url = "http://localhost:3030/api/proxy/auth/captcha";
+        let url = "http://127.0.0.1:3030/api/proxy/auth/captcha";
 
         let body = json!({
             "original_url": "https://icourses.jlu.edu.cn/xsxk/auth/captcha"
@@ -265,8 +266,8 @@ impl WasmClient {
     }
 
     /// Send login request via proxy server
-    pub async fn send_login_request_proxy(&self, params: LoginParams<'_>) -> Result<Value> {
-        let url = "http://localhost:3030/api/proxy/auth/login";
+    pub async fn send_login_request_proxy(&self, params: LoginParams) -> Result<Value> {
+        let url = "http://127.0.0.1:3030/api/proxy/auth/login";
 
         let body = json!({
             "original_url": "https://icourses.jlu.edu.cn/xsxk/auth/login",
@@ -287,7 +288,7 @@ impl WasmClient {
 
     /// Set batch via proxy server
     pub async fn set_batch_proxy(&self, batch_id: &str, token: &str) -> Result<Value> {
-        let url = "http://localhost:3030/api/proxy/elective/user";
+        let url = "http://127.0.0.1:3030/api/proxy/elective/user";
 
         let body = json!({
             "original_url": "https://icourses.jlu.edu.cn/xsxk/elective/user",
@@ -305,8 +306,8 @@ impl WasmClient {
     }
 
     /// Get selected courses via proxy server
-    pub async fn get_selected_courses_proxy(&self, params: CourseQueryParams<'_>) -> Result<Value> {
-        let url = "http://localhost:3030/api/proxy/elective/select";
+    pub async fn get_selected_courses_proxy(&self, params: CourseQueryParams) -> Result<Value> {
+        let url = "http://127.0.0.1:3030/api/proxy/elective/select";
 
         let body = json!({
             "original_url": "https://icourses.jlu.edu.cn/xsxk/elective/select",
@@ -315,7 +316,7 @@ impl WasmClient {
 
         let resp = Self::build_request("POST", url)
             .await
-            .header("Authorization", params.token)
+            .header("Authorization", &params.token)
             .json(&body)?
             .send()
             .await?;
@@ -324,8 +325,8 @@ impl WasmClient {
     }
 
     /// Get favorite courses via proxy server
-    pub async fn get_favorite_courses_proxy(&self, params: CourseQueryParams<'_>) -> Result<Value> {
-        let url = "http://localhost:3030/api/proxy/sc/clazz/list";
+    pub async fn get_favorite_courses_proxy(&self, params: CourseQueryParams) -> Result<Value> {
+        let url = "http://127.0.0.1:3030/api/proxy/sc/clazz/list";
 
         let body = json!({
             "original_url": "https://icourses.jlu.edu.cn/xsxk/sc/clazz/list",
@@ -334,7 +335,7 @@ impl WasmClient {
 
         let resp = Self::build_request("POST", url)
             .await
-            .header("Authorization", params.token)
+            .header("Authorization", &params.token)
             .json(&body)?
             .send()
             .await?;
@@ -343,8 +344,8 @@ impl WasmClient {
     }
 
     /// Select course via proxy server
-    pub async fn select_course_proxy(&self, params: CourseSelectParams<'_>) -> Result<Value> {
-        let url = "http://localhost:3030/api/proxy/sc/clazz/addxk";
+    pub async fn select_course_proxy(&self, params: CourseSelectParams) -> Result<Value> {
+        let url = "http://127.0.0.1:3030/api/proxy/sc/clazz/addxk";
 
         let body = json!({
             "original_url": "https://icourses.jlu.edu.cn/xsxk/sc/clazz/addxk",
@@ -356,7 +357,7 @@ impl WasmClient {
 
         let resp = Self::build_request("POST", url)
             .await
-            .header("Authorization", params.token)
+            .header("Authorization", &params.token)
             .json(&body)?
             .send()
             .await?;
@@ -398,10 +399,10 @@ pub async fn send_login_request(
 ) -> Result<Value> {
     let client = WasmClient;
     let params = LoginParams {
-        username,
-        encrypted_password,
-        captcha,
-        uuid,
+        username: username.to_string(),
+        encrypted_password: encrypted_password.to_string(),
+        captcha: captcha.to_string(),
+        uuid: uuid.to_string(),
     };
     client.send_login_request(params).await
 }
@@ -414,10 +415,10 @@ pub async fn send_login_request_proxy(
 ) -> Result<Value> {
     let client = WasmClient;
     let params = LoginParams {
-        username,
-        encrypted_password,
-        captcha,
-        uuid,
+        username: username.to_string(),
+        encrypted_password: encrypted_password.to_string(),
+        captcha: captcha.to_string(),
+        uuid: uuid.to_string(),
     };
     client.send_login_request_proxy(params).await
 }
@@ -434,25 +435,25 @@ pub async fn set_batch_proxy(batch_id: &str, token: &str) -> Result<Value> {
 
 pub async fn get_selected_courses(token: &str, batch_id: &str) -> Result<Value> {
     let client = WasmClient;
-    let params = CourseQueryParams { token, batch_id };
+    let params = CourseQueryParams { token: token.to_string(), batch_id: batch_id.to_string() };
     client.get_selected_courses(params).await
 }
 
 pub async fn get_selected_courses_proxy(token: &str, batch_id: &str) -> Result<Value> {
     let client = WasmClient;
-    let params = CourseQueryParams { token, batch_id };
+    let params = CourseQueryParams { token: token.to_string(), batch_id: batch_id.to_string() };
     client.get_selected_courses_proxy(params).await
 }
 
 pub async fn get_favorite_courses(token: &str, batch_id: &str) -> Result<Value> {
     let client = WasmClient;
-    let params = CourseQueryParams { token, batch_id };
+    let params = CourseQueryParams { token: token.to_string(), batch_id: batch_id.to_string() };
     client.get_favorite_courses(params).await
 }
 
 pub async fn get_favorite_courses_proxy(token: &str, batch_id: &str) -> Result<Value> {
     let client = WasmClient;
-    let params = CourseQueryParams { token, batch_id };
+    let params = CourseQueryParams { token: token.to_string(), batch_id: batch_id.to_string() };
     client.get_favorite_courses_proxy(params).await
 }
 
@@ -465,11 +466,11 @@ pub async fn select_course(
 ) -> Result<Value> {
     let client = WasmClient;
     let params = CourseSelectParams {
-        token,
-        batch_id,
-        class_type,
-        class_id,
-        secret_val,
+        token: token.to_string(),
+        batch_id: batch_id.to_string(),
+        class_type: class_type.to_string(),
+        class_id: class_id.to_string(),
+        secret_val: secret_val.to_string(),
     };
     client.select_course(params).await
 }
@@ -483,11 +484,11 @@ pub async fn select_course_proxy(
 ) -> Result<Value> {
     let client = WasmClient;
     let params = CourseSelectParams {
-        token,
-        batch_id,
-        class_type,
-        class_id,
-        secret_val,
+        token: token.to_string(),
+        batch_id: batch_id.to_string(),
+        class_type: class_type.to_string(),
+        class_id: class_id.to_string(),
+        secret_val: secret_val.to_string(),
     };
     client.select_course_proxy(params).await
 }

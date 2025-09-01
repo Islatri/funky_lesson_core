@@ -11,7 +11,8 @@ use reqwest::{
 use serde_json::Value;
 use std::collections::HashMap;
 
-use super::{CourseQueryParams, CourseSelectParams, HttpClient, LoginParams, RequestApi};
+use crate::model::dtos::{CourseQueryParams, CourseSelectParams, LoginParams, };
+use crate::interface::{HttpClient,RequestApi};
 
 /// HTTP client for no-WASM environments using reqwest
 #[derive(Debug, Clone)]
@@ -32,27 +33,62 @@ impl HttpClient for NoWasmClient {
 impl RequestApi for NoWasmClient {
     async fn get_aes_key(&self) -> Result<Vec<u8>> {
         let index_url = "https://icourses.jlu.edu.cn/";
-        let resp = self.client.get(index_url).send().await?;
-        let html = resp.text().await?;
+        
+        // 添加重试机制
+        for attempt in 1..=3 {
+            match self.client.get(index_url).send().await {
+                Ok(resp) => {
+                    let status = resp.status();
+                    if !status.is_success() {
+                        eprintln!("HTTP error {}: {}", status.as_u16(), status.canonical_reason().unwrap_or("Unknown"));
+                        if attempt == 3 {
+                            return Err(ErrorKind::ParseError(format!("HTTP error: {}", status)).into());
+                        }
+                        continue;
+                    }
+                    
+                    let html = match resp.text().await {
+                        Ok(html) => html,
+                        Err(e) => {
+                            eprintln!("Failed to read response text: {}", e);
+                            if attempt == 3 {
+                                return Err(e.into());
+                            }
+                            continue;
+                        }
+                    };
 
-        // Extract AES key from HTML
-        let key = html
-            .find("loginVue.loginForm.aesKey")
-            .and_then(|start| {
-                html[start..].find('"').map(|key_start| {
-                    html[start + key_start + 1..].find('"').map(|key_end| {
-                        html[start + key_start + 1..start + key_start + 1 + key_end]
-                            .as_bytes()
-                            .to_vec()
-                    })
-                })
-            })
-            .flatten()
-            .ok_or_else(|| {
-                ErrorKind::ParseError("Failed to extract AES key".to_string())
-            })?;
+                    // Extract AES key from HTML
+                    let key = html
+                        .find("loginVue.loginForm.aesKey")
+                        .and_then(|start| {
+                            html[start..].find('"').map(|key_start| {
+                                html[start + key_start + 1..].find('"').map(|key_end| {
+                                    html[start + key_start + 1..start + key_start + 1 + key_end]
+                                        .as_bytes()
+                                        .to_vec()
+                                })
+                            })
+                        })
+                        .flatten()
+                        .ok_or_else(|| {
+                            ErrorKind::ParseError("Failed to extract AES key from HTML".to_string())
+                        })?;
 
-        Ok(key)
+                    println!("AES key extracted successfully");
+                    return Ok(key);
+                },
+                Err(e) => {
+                    eprintln!("Network error (attempt {}/3): {}", attempt, e);
+                    if attempt == 3 {
+                        return Err(e.into());
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+                }
+            }
+        }
+        
+        unreachable!()
     }
 
     async fn get_captcha(&self) -> Result<(String, String)> {
@@ -73,7 +109,7 @@ impl RequestApi for NoWasmClient {
         Ok((uuid, captcha))
     }
 
-    async fn send_login_request(&self, params: LoginParams<'_>) -> Result<Value> {
+    async fn send_login_request(&self, params: LoginParams) -> Result<Value> {
         let login_url = "https://icourses.jlu.edu.cn/xsxk/auth/login";
 
         let mut query_params = HashMap::new();
@@ -115,17 +151,17 @@ impl RequestApi for NoWasmClient {
         Ok(resp.json::<Value>().await?)
     }
 
-    async fn get_selected_courses(&self, params: CourseQueryParams<'_>) -> Result<Value> {
+    async fn get_selected_courses(&self, params: CourseQueryParams) -> Result<Value> {
         let url = "https://icourses.jlu.edu.cn/xsxk/elective/select";
         let mut headers = HeaderMap::new();
         headers.insert(
             "Authorization",
-            HeaderValue::from_str(params.token)
+            HeaderValue::from_str(&params.token)
                 .map_err(|e| ErrorKind::ParseError(e.to_string()))?,
         );
         headers.insert(
             "batchId",
-            HeaderValue::from_str(params.batch_id)
+            HeaderValue::from_str(&params.batch_id)
                 .map_err(|e| ErrorKind::ParseError(e.to_string()))?,
         );
 
@@ -134,17 +170,17 @@ impl RequestApi for NoWasmClient {
         Ok(resp.json::<Value>().await?)
     }
 
-    async fn get_favorite_courses(&self, params: CourseQueryParams<'_>) -> Result<Value> {
+    async fn get_favorite_courses(&self, params: CourseQueryParams) -> Result<Value> {
         let url = "https://icourses.jlu.edu.cn/xsxk/sc/clazz/list";
         let mut headers = HeaderMap::new();
         headers.insert(
             "Authorization",
-            HeaderValue::from_str(params.token)
+            HeaderValue::from_str(&params.token)
                 .map_err(|e| ErrorKind::ParseError(e.to_string()))?,
         );
         headers.insert(
             "batchId",
-            HeaderValue::from_str(params.batch_id)
+            HeaderValue::from_str(&params.batch_id)
                 .map_err(|e| ErrorKind::ParseError(e.to_string()))?,
         );
 
@@ -153,17 +189,17 @@ impl RequestApi for NoWasmClient {
         Ok(resp.json::<Value>().await?)
     }
 
-    async fn select_course(&self, params: CourseSelectParams<'_>) -> Result<Value> {
+    async fn select_course(&self, params: CourseSelectParams) -> Result<Value> {
         let url = "https://icourses.jlu.edu.cn/xsxk/sc/clazz/addxk";
         let mut headers = HeaderMap::new();
         headers.insert(
             "Authorization",
-            HeaderValue::from_str(params.token)
+            HeaderValue::from_str(&params.token)
                 .map_err(|e| ErrorKind::ParseError(e.to_string()))?,
         );
         headers.insert(
             "batchId",
-            HeaderValue::from_str(params.batch_id)
+            HeaderValue::from_str(&params.batch_id)
                 .map_err(|e| ErrorKind::ParseError(e.to_string()))?,
         );
 
@@ -211,10 +247,10 @@ pub async fn send_login_request(
 ) -> Result<Value> {
     let wrapper = NoWasmClient { client: client.clone() };
     let params = LoginParams {
-        username,
-        encrypted_password,
-        captcha,
-        uuid,
+        username: username.to_string(),
+        encrypted_password: encrypted_password.to_string(),
+        captcha: captcha.to_string(),
+        uuid: uuid.to_string(),
     };
     wrapper.send_login_request(params).await
 }
@@ -226,13 +262,13 @@ pub async fn set_batch(client: &Client, batch_id: &str, token: &str) -> Result<V
 
 pub async fn get_selected_courses(client: &Client, token: &str, batch_id: &str) -> Result<Value> {
     let wrapper = NoWasmClient { client: client.clone() };
-    let params = CourseQueryParams { token, batch_id };
+    let params = CourseQueryParams { token: token.to_string(), batch_id: batch_id.to_string() };
     wrapper.get_selected_courses(params).await
 }
 
 pub async fn get_favorite_courses(client: &Client, token: &str, batch_id: &str) -> Result<Value> {
     let wrapper = NoWasmClient { client: client.clone() };
-    let params = CourseQueryParams { token, batch_id };
+    let params = CourseQueryParams { token: token.to_string(), batch_id: batch_id.to_string() };
     wrapper.get_favorite_courses(params).await
 }
 
@@ -246,11 +282,11 @@ pub async fn select_course(
 ) -> Result<Value> {
     let wrapper = NoWasmClient { client: client.clone() };
     let params = CourseSelectParams {
-        token,
-        batch_id,
-        class_type,
-        class_id,
-        secret_val,
+        token: token.to_string(),
+        batch_id: batch_id.to_string(),
+        class_type: class_type.to_string(),
+        class_id: class_id.to_string(),
+        secret_val: secret_val.to_string(),
     };
     wrapper.select_course(params).await
 }
